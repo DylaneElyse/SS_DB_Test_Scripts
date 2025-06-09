@@ -24,8 +24,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-
 CREATE TRIGGER trg_after_insert_on_round_details
 AFTER INSERT ON ss_round_details
 FOR EACH ROW
 EXECUTE FUNCTION handle_new_row_on_round_details();
+
+DROP TRIGGER IF EXISTS trg_after_insert_on_round_details ON ss_round_details;

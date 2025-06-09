@@ -1,34 +1,33 @@
-CREATE OR REPLACE FUNCTION handle_row_update_on_event_division()
+DROP TRIGGER IF EXISTS trg_sync_heats_on_round_update ON ss_round_details;
+DROP FUNCTION IF EXISTS handle_update_on_round_details();
+
+-- CREATE THE FUNCTION
+CREATE OR REPLACE FUNCTION handle_update_on_round_details()
 RETURNS TRIGGER AS $$
 BEGIN
   IF NEW.num_heats IS DISTINCT FROM OLD.num_heats THEN
-    DECLARE
-      v_event_id ss_round_details.event_id%TYPE;
-      v_division_id ss_round_details.division_id%TYPE;
-      v_round_id ss_round_details.round_id%TYPE;
-      v_num_heats ss_round_details.num_heats%TYPE;
-      v_count INT; -- Simpler to declare as INT
 
-    BEGIN
-      v_event_id := NEW.event_id;
-      v_division_id := NEW.division_id;
-      v_round_id := NEW.round_id;
-      v_num_heats := NEW.num_heats;
-      v_count := 1;
+    DELETE FROM ss_heat_details
+    WHERE round_id = NEW.round_id;
 
-      WHILE (v_count <= v_num_heats) LOOP
-        INSERT INTO ss_heat_details (heat_num, num_runs, round_id) -- Assuming round_id is DEFAULT
-          VALUES (v_count, DEFAULT, v_round_id);
-        v_count := v_count + 1;
-      END LOOP; -- Removed the incorrect EXIT LOOP
-    END;
+    IF NEW.num_heats > 0 THEN
+      INSERT INTO ss_heat_details (round_id, heat_num, num_runs)
+      SELECT
+        NEW.round_id,
+        i,
+        DEFAULT 
+      FROM generate_series(1, NEW.num_heats) AS i;
+    END IF;
+
   END IF;
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
 
-CREATE TRIGGER trg_after_update_on_round_details
-AFTER INSERT ON ss_round_details
+-- CREATE THE TRIGGER
+CREATE TRIGGER trg_sync_heats_on_round_update
+AFTER UPDATE ON ss_round_details
 FOR EACH ROW
-EXECUTE FUNCTION handle_row_update_on_event_division();
+EXECUTE FUNCTION handle_update_on_round_details();

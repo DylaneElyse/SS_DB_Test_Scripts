@@ -1,36 +1,3 @@
--- Active: 1749478571723@@127.0.0.1@5432@ss_test_db@public
--- 3. ss_disciplines
--- 4. ss_division
--- 5. ss_athletes
--- 6. ss_events (depends on ss_disciplines)
--- 7. ss_event_divisions (depends on ss_events, ss_division)
--- 8. ss_round_details (depends on ss_event_divisions)
--- 9. ss_heat_details (depends on ss_round_details)
--- 10. ss_event_registrations (depends on ss_event_divisions, ss_athletes)
--- 11. ss_heat_results (depends on ss_event_registrations, ss_heat_details)
--- 12. ss_run_results (depends on ss_heat_results)
--- 13. ss_event_judges (depends on ss_events)
--- 14. ss_run_scores (depends on ss_run_results)
--- 15. ss_event_personnel (depends on ss_events, ss_users)
-
-DROP TABLE IF EXISTS ss_roles CASCADE;
-DROP TABLE IF EXISTS ss_users CASCADE;
-DROP TABLE IF EXISTS ss_disciplines CASCADE;
-DROP TABLE IF EXISTS ss_division CASCADE;
-DROP TABLE IF EXISTS ss_athletes CASCADE;
-DROP TABLE IF EXISTS ss_events CASCADE;
-DROP TABLE IF EXISTS ss_event_divisions CASCADE;
-DROP TABLE IF EXISTS ss_round_details CASCADE;
-DROP TABLE IF EXISTS ss_heat_details CASCADE;
-DROP TABLE IF EXISTS ss_event_registrations CASCADE;
-DROP TABLE IF EXISTS ss_heat_results CASCADE;
-DROP TABLE IF EXISTS ss_run_results CASCADE;
-DROP TABLE IF EXISTS ss_event_judges CASCADE;
-DROP TABLE IF EXISTS ss_run_scores CASCADE;
-DROP TABLE IF EXISTS ss_event_personnel CASCADE;
-
-
--- 1. Roles Table
 CREATE TABLE IF NOT EXISTS ss_roles (
     role_id integer PRIMARY KEY, 
     role_name VARCHAR(100) NOT NULL
@@ -188,11 +155,6 @@ CREATE TABLE IF NOT EXISTS ss_event_personnel (
     FOREIGN KEY (user_id) REFERENCES ss_users(user_id) ON DELETE RESTRICT ON UPDATE CASCADE,
     FOREIGN KEY (event_id) REFERENCES ss_events(event_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-
-
-
-
-
 
 
 

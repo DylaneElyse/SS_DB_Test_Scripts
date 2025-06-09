@@ -1,0 +1,42 @@
+# Use the 'name' property to give your project a specific name,
+# preventing conflicts if another project has a 'db' service.
+name: 'my-project'
+
+services:
+  db:
+    # 1. Pinned to a specific major version for stability
+    image: postgres:latest
+    
+    # 2. Restart policy to automatically restart the container if it stops
+    restart: unless-stopped
+    
+    # 3. Use the .env file for secrets instead of hardcoding them
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      
+    ports:
+      # It's good practice to add a comment explaining the mapping: <host>:<container>
+      - "5432:5432"
+      
+    volumes:
+      # The named volume ensures your data persists even if the container is removed
+      - db_data:/var/lib/postgresql/data
+      
+    # (Optional but Recommended) Add a healthcheck
+    # This tells Docker to wait until the database is truly ready to accept connections.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+# 4. Top-level 'volumes' key to explicitly declare the named volume
+volumes:
+  db_data:
+    # driver: local is the default, but being explicit can be helpful
+    driver: local

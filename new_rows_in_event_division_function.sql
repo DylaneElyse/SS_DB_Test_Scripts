@@ -18,6 +18,7 @@ BEGIN
   v_event_id := NEW.event_id;
   v_division_id := NEW.division_id;
   v_num_rounds := NEW.num_rounds;
+  
 
   IF (v_num_rounds = 1) THEN
     -- Assuming 'Finals' or a specific name for a single round.
@@ -57,6 +58,8 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+
 
 
 CREATE TRIGGER trg_after_insert_on_event_division
