@@ -141,6 +141,7 @@ CREATE TABLE ss_heat_results (
     best DECIMAL,
     seeding DECIMAL,
     PRIMARY KEY (round_heat_id, event_id, division_id, athlete_id), 
+    UNIQUE (round_heat_id, athlete_id),
     FOREIGN KEY (round_heat_id) REFERENCES ss_heat_details(round_heat_id) ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY (event_id, division_id, athlete_id) REFERENCES ss_event_registrations(event_id, division_id, athlete_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
