@@ -1,3 +1,4 @@
+-- Active: 1749478571723@@127.0.0.1@5432@ss_test_db@public
 CREATE OR REPLACE PROCEDURE reseed_heat(p_round_heat_id INTEGER)
 LANGUAGE plpgsql
 AS $$
@@ -79,6 +80,7 @@ BEGIN
     WHERE
       ss_heat_results.athlete_id = new_seeding.athlete_id
       AND ss_heat_results.round_heat_id = p_round_heat_id;
+  END IF;
 
 END;
 $$;

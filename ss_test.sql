@@ -31,3 +31,6 @@ DELETE FROM ss_run_results;
 DELETE FROM ss_event_judges;
 DELETE FROM ss_run_scores;
 DELETE FROM ss_event_personnel;
+
+
+describe ss_event_registrations;

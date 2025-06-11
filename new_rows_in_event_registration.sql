@@ -16,7 +16,7 @@ BEGIN
         0
     FROM
         ss_round_details rd
-        INNER JOIN ss_heat_details hd ON rd.round_heat_id = hd.round_heat_id
+        INNER JOIN ss_heat_details hd ON rd.round_id = hd.round_id
     WHERE
         rd.event_id = NEW.event_id
         AND rd.division_id = NEW.division_id

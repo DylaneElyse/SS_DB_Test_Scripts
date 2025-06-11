@@ -13,31 +13,31 @@
 -- 14. ss_run_scores (depends on ss_run_results)
 -- 15. ss_event_personnel (depends on ss_events, ss_users)
 
-DROP TABLE IF EXISTS ss_roles CASCADE;
-DROP TABLE IF EXISTS ss_users CASCADE;
-DROP TABLE IF EXISTS ss_disciplines CASCADE;
-DROP TABLE IF EXISTS ss_division CASCADE;
-DROP TABLE IF EXISTS ss_athletes CASCADE;
-DROP TABLE IF EXISTS ss_events CASCADE;
-DROP TABLE IF EXISTS ss_event_divisions CASCADE;
-DROP TABLE IF EXISTS ss_round_details CASCADE;
-DROP TABLE IF EXISTS ss_heat_details CASCADE;
-DROP TABLE IF EXISTS ss_event_registrations CASCADE;
-DROP TABLE IF EXISTS ss_heat_results CASCADE;
-DROP TABLE IF EXISTS ss_run_results CASCADE;
-DROP TABLE IF EXISTS ss_event_judges CASCADE;
-DROP TABLE IF EXISTS ss_run_scores CASCADE;
-DROP TABLE IF EXISTS ss_event_personnel CASCADE;
+DROP TABLE ss_roles CASCADE;
+DROP TABLE ss_users CASCADE;
+DROP TABLE ss_disciplines CASCADE;
+DROP TABLE ss_division CASCADE;
+DROP TABLE ss_athletes CASCADE;
+DROP TABLE ss_events CASCADE;
+DROP TABLE ss_event_divisions CASCADE;
+DROP TABLE ss_round_details CASCADE;
+DROP TABLE ss_heat_details CASCADE;
+DROP TABLE ss_event_registrations CASCADE;
+DROP TABLE ss_heat_results CASCADE;
+DROP TABLE ss_run_results CASCADE;
+DROP TABLE ss_event_judges CASCADE;
+DROP TABLE ss_run_scores CASCADE;
+DROP TABLE ss_event_personnel CASCADE;
 
 
 -- 1. Roles Table
-CREATE TABLE IF NOT EXISTS ss_roles (
+CREATE TABLE ss_roles (
     role_id integer PRIMARY KEY, 
     role_name VARCHAR(100) NOT NULL
 );
 
 -- 5. Users Table
-CREATE TABLE IF NOT EXISTS ss_users (
+CREATE TABLE ss_users (
     user_id SERIAL PRIMARY KEY, 
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS ss_users (
 );
 
 -- 2. Disciplines Table
-CREATE TABLE IF NOT EXISTS ss_disciplines (
+CREATE TABLE ss_disciplines (
     discipline_id VARCHAR(100) PRIMARY KEY,
     category_name VARCHAR(100) NOT NULL,
     subcategory_name VARCHAR(100) NOT NULL,
@@ -57,13 +57,13 @@ CREATE TABLE IF NOT EXISTS ss_disciplines (
 );
 
 -- 3. Division Table
-CREATE TABLE IF NOT EXISTS ss_division (
+CREATE TABLE ss_division (
     division_id SERIAL PRIMARY KEY,
     division_name VARCHAR(100) NOT NULL
 );
 
 -- 4. Athletes Table
-CREATE TABLE IF NOT EXISTS ss_athletes (
+CREATE TABLE ss_athletes (
     athlete_id SERIAL PRIMARY KEY, 
     last_name VARCHAR(255) NOT NULL,
     first_name VARCHAR(255) NOT NULL,
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS ss_athletes (
 );
 
 -- 6. Events Table
-CREATE TABLE IF NOT EXISTS ss_events (
+CREATE TABLE ss_events (
     event_id SERIAL PRIMARY KEY, 
     name VARCHAR(255) NOT NULL,
     start_date DATE NOT NULL,
@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS ss_events (
 );
 
 -- 7. Event Divisions (Junction Table)
-CREATE TABLE IF NOT EXISTS ss_event_divisions (
+CREATE TABLE ss_event_divisions (
     event_id integer NOT NULL,
     division_id integer NOT NULL,
     num_rounds integer NOT NULL DEFAULT 1,
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS ss_event_divisions (
 );
 
 -- 8. Round Details Table (Rounds within an Event Division)
-CREATE TABLE IF NOT EXISTS ss_round_details (
+CREATE TABLE ss_round_details (
     event_id integer NOT NULL,
     division_id integer NOT NULL,
     round_id SERIAL NOT NULL UNIQUE, 
@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS ss_round_details (
 );
 
 -- 9. Heat Details (Heats within a Division Round)
-CREATE TABLE IF NOT EXISTS ss_heat_details (
+CREATE TABLE ss_heat_details (
     round_heat_id SERIAL PRIMARY KEY,
     heat_num integer NOT NULL,
     num_runs integer NOT NULL DEFAULT 3,
@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS ss_heat_details (
 );
 
 -- 10. Event Registrations (Junction Table)
-CREATE TABLE IF NOT EXISTS ss_event_registrations (
+CREATE TABLE ss_event_registrations (
     event_id integer NOT NULL,
     division_id integer NOT NULL,
     athlete_id integer NOT NULL,
@@ -133,19 +133,20 @@ CREATE TABLE IF NOT EXISTS ss_event_registrations (
 );
 
 -- 11. Heat Results
-CREATE TABLE IF NOT EXISTS ss_heat_results (
+CREATE TABLE ss_heat_results (
     round_heat_id integer NOT NULL,
     event_id integer NOT NULL,  
     division_id integer NOT NULL,   
     athlete_id integer NOT NULL,
     best DECIMAL,
+    seeding DECIMAL,
     PRIMARY KEY (round_heat_id, event_id, division_id, athlete_id), 
     FOREIGN KEY (round_heat_id) REFERENCES ss_heat_details(round_heat_id) ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY (event_id, division_id, athlete_id) REFERENCES ss_event_registrations(event_id, division_id, athlete_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- 12. Run Results
-CREATE TABLE IF NOT EXISTS ss_run_results (
+CREATE TABLE ss_run_results (
     run_result_id SERIAL PRIMARY KEY,  
     round_heat_id integer NOT NULL,
     event_id integer NOT NULL,         
@@ -159,7 +160,7 @@ CREATE TABLE IF NOT EXISTS ss_run_results (
 );
 
 -- 13. Event Judges
-CREATE TABLE IF NOT EXISTS ss_event_judges (
+CREATE TABLE ss_event_judges (
     event_id integer NOT NULL,
     personnel_id SERIAL NOT NULL,
     header VARCHAR(50) NOT NULL,
@@ -170,7 +171,7 @@ CREATE TABLE IF NOT EXISTS ss_event_judges (
 );
 
 -- 14. Run Scores (No change needed here if Option 1 for ss_event_judges is used)
-CREATE TABLE IF NOT EXISTS ss_run_scores (
+CREATE TABLE ss_run_scores (
     personnel_id integer NOT NULL,
     run_result_id integer NOT NULL,
     score DECIMAL,
@@ -180,7 +181,7 @@ CREATE TABLE IF NOT EXISTS ss_run_scores (
 );
 
 -- 15. Event Personnel
-CREATE TABLE IF NOT EXISTS ss_event_personnel (
+CREATE TABLE ss_event_personnel (
     event_id integer NOT NULL,
     user_id integer NOT NULL,
     event_role VARCHAR(50),

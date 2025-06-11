@@ -96,4 +96,4 @@ INSERT INTO ss_event_registrations(event_id, athlete_id, division_id) VALUES
   (7,	29,	3),
   (7,	30,	3),
   (7,	31,	3)
-ON CONFLICT DO NOTHING;
+  ON CONFLICT (event_id,division_id,athlete_id) DO NOTHING;
