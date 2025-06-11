@@ -36,7 +36,7 @@ CREATE TABLE ss_roles (
     role_name VARCHAR(100) NOT NULL
 );
 
--- 5. Users Table
+-- 2. Users Table
 CREATE TABLE ss_users (
     user_id SERIAL PRIMARY KEY, 
     first_name VARCHAR(100) NOT NULL,
@@ -48,7 +48,7 @@ CREATE TABLE ss_users (
     UNIQUE (email)
 );
 
--- 2. Disciplines Table
+-- 3. Disciplines Table
 CREATE TABLE ss_disciplines (
     discipline_id VARCHAR(100) PRIMARY KEY,
     category_name VARCHAR(100) NOT NULL,
@@ -56,13 +56,13 @@ CREATE TABLE ss_disciplines (
     discipline_name VARCHAR(100) NOT NULL
 );
 
--- 3. Division Table
+-- 4. Division Table
 CREATE TABLE ss_division (
     division_id SERIAL PRIMARY KEY,
     division_name VARCHAR(100) NOT NULL
 );
 
--- 4. Athletes Table
+-- 5. Athletes Table
 CREATE TABLE ss_athletes (
     athlete_id SERIAL PRIMARY KEY, 
     last_name VARCHAR(255) NOT NULL,

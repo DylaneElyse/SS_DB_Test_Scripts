@@ -1,4 +1,4 @@
-CREATE FUNCTION handle_new_rows_in_heat_results()
+CREATE FUNCTION handle_insert_on_heat_results()
 RETURNS TRIGGER AS $$
 DECLARE
     v_num_runs ss_heat_details.num_runs%TYPE;

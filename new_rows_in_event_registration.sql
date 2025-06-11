@@ -1,10 +1,7 @@
-DROP TRIGGER IF EXISTS trg_handle_new_rows_in_event_registrations ON ss_event_registrations;
-DROP TRIGGER IF EXISTS trg_reseed_affected_heats ON ss_event_registrations;
-DROP FUNCTION IF EXISTS handle_new_rows_in_event_registrations();
-DROP FUNCTION IF EXISTS reseed_affected_heats();
+DROP FUNCTION IF EXISTS handle_insert_on_event_registrations() CASCADE;
+DROP FUNCTION IF EXISTS reseed_affected_heats() CASCADE;
 
-
-CREATE OR REPLACE FUNCTION handle_new_rows_in_event_registrations()
+CREATE OR REPLACE FUNCTION handle_insert_on_event_registrations()
 RETURNS TRIGGER AS $$
 BEGIN
     INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id, seeding)
@@ -22,10 +19,14 @@ BEGIN
         AND rd.division_id = NEW.division_id
     ON CONFLICT (round_heat_id, athlete_id) DO NOTHING;
 
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Registration failed: No heats are defined for event_id=%, division_id=%.', NEW.event_id, NEW.division_id
+        USING HINT = 'Please ensure that at least one round and one heat have been created for this event and division before registering athletes.';
+    END IF;
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
 
 CREATE OR REPLACE FUNCTION reseed_affected_heats()
 RETURNS TRIGGER AS $$
@@ -40,21 +41,15 @@ BEGIN
     LOOP
         CALL reseed_heat(v_heat_id);
     END LOOP;
-
     RETURN NULL; 
 END;
 $$ LANGUAGE plpgsql;
 
-
-
-CREATE TRIGGER trg_handle_new_rows_in_event_registrations
+CREATE TRIGGER trg_handle_insert_on_event_registrations
 AFTER INSERT ON ss_event_registrations
-FOR EACH ROW
-EXECUTE FUNCTION handle_new_rows_in_event_registrations();
-
+FOR EACH ROW EXECUTE FUNCTION handle_insert_on_event_registrations();
 
 CREATE TRIGGER trg_reseed_affected_heats
 AFTER INSERT ON ss_event_registrations
 REFERENCING NEW TABLE AS new_rows
-FOR EACH STATEMENT
-EXECUTE FUNCTION reseed_affected_heats();
+FOR EACH STATEMENT EXECUTE FUNCTION reseed_affected_heats();

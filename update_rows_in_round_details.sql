@@ -1,7 +1,6 @@
 DROP TRIGGER IF EXISTS trg_sync_heats_on_round_update ON ss_round_details;
 DROP FUNCTION IF EXISTS handle_update_on_round_details();
 
--- CREATE THE FUNCTION
 CREATE OR REPLACE FUNCTION handle_update_on_round_details()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -26,7 +25,6 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- CREATE THE TRIGGER
 CREATE TRIGGER trg_sync_heats_on_round_update
 AFTER UPDATE ON ss_round_details
 FOR EACH ROW
