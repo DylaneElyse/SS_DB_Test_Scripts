@@ -34,3 +34,13 @@ DELETE FROM ss_event_personnel;
 
 
 describe ss_event_registrations;
+
+
+INSERT INTO ss_heat_details (heat_num, num_runs, round_id)
+VALUES (2, 3, 1);
+
+SELECT * FROM ss_heat_results
+WHERE round_heat_id = 23;
+
+INSERT INTO ss_athletes (first_name, last_name, dob, gender)
+VALUES ('John', 'Doe', '1990-01-01', 'M');
