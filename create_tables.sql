@@ -166,8 +166,10 @@ CREATE TABLE ss_event_judges (
     personnel_id SERIAL NOT NULL,
     header VARCHAR(50) NOT NULL,
     name VARCHAR(100),
+    passcode CHAR(4) NOT NULL DEFAULT generate_random_4_digit_code(),
     PRIMARY KEY (event_id, personnel_id),
     UNIQUE (personnel_id),
+    UNIQUE (passcode),
     FOREIGN KEY (event_id) REFERENCES ss_events(event_id) ON DELETE CASCADE ON UPDATE CASCADE 
 );
 
