@@ -44,3 +44,7 @@ WHERE round_heat_id = 23;
 
 INSERT INTO ss_athletes (first_name, last_name, dob, gender)
 VALUES ('John', 'Doe', '1990-01-01', 'M');
+
+
+DROP TRIGGER IF EXISTS after_insert_on_event_division ON ss_event_divisions;
+DROP TRIGGER IF EXISTS after_update_on_event_division ON ss_event_divisions;

@@ -32,28 +32,33 @@ BEGIN
         v_points_column := 'athlete_id';
     END IF;
 
-    v_sql := format(
-        $dynamic_sql$
-        WITH new_seeding AS (
-            SELECT
-                a.athlete_id,
-                ROW_NUMBER() OVER (ORDER BY a.%I ASC, a.athlete_id ASC) AS new_seed_value
-            FROM ss_heat_results AS hr
-            JOIN ss_event_registrations AS er
-                ON hr.registration_id = er.registration_id
-            JOIN ss_athletes AS a
-                ON er.athlete_id = a.athlete_id
-            WHERE hr.heat_id = $1
-        )
-        UPDATE ss_heat_results
-        SET seeding = ns.new_seed_value
-        FROM new_seeding AS ns
-        WHERE ss_athletes.athlete_id = ns.athlete_id
-          AND ss_heat_results.heat_id = $1;
-        $dynamic_sql$,
-        v_points_column
-    );
-
+  v_sql := format(
+    $dynamic_sql$
+    WITH new_seeding AS (
+        SELECT
+            -- CHANGE #1: Instead of athlete_id, we MUST select the key that
+            -- ss_heat_results actually uses: registration_id.
+            er.registration_id,
+            -- The ranking logic itself is preserved.
+            ROW_NUMBER() OVER (ORDER BY a.%I DESC, a.athlete_id ASC) AS new_seed_value
+        FROM
+            ss_heat_results AS hr
+            JOIN ss_event_registrations AS er ON hr.registration_id = er.registration_id
+            JOIN ss_athletes AS a ON er.athlete_id = a.athlete_id
+        WHERE
+            hr.heat_id = $1
+    )
+    UPDATE ss_heat_results
+    SET seeding = ns.new_seed_value
+    FROM new_seeding AS ns
+    WHERE
+        -- CHANGE #2: Now we can join ss_heat_results to our subquery
+        -- using the correct common key: registration_id.
+        ss_heat_results.registration_id = ns.registration_id
+        AND ss_heat_results.heat_id = $1;
+    $dynamic_sql$,
+    v_points_column
+  );
     RAISE NOTICE 'Executing reseed for heat_id % using column %I', p_heat_id, v_points_column;
     EXECUTE v_sql USING p_heat_id;
 

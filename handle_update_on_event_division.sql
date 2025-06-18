@@ -1,7 +1,5 @@
 CREATE OR REPLACE FUNCTION public.handle_update_on_event_division()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+  RETURNS trigger AS $function$
 BEGIN
     IF NEW.num_rounds IS DISTINCT FROM OLD.num_rounds THEN
       DECLARE
@@ -55,7 +53,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END;
-$function$
+$function$ LANGUAGE plpgsql;
 
 
 -- CREATE OR REPLACE FUNCTION handle_update_on_event_division()

@@ -1,7 +1,5 @@
 CREATE OR REPLACE FUNCTION public.handle_insert_on_event_division()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+  RETURNS trigger AS $function$
 DECLARE
   v_event_id ss_round_details.event_id%TYPE;
   v_division_id ss_round_details.division_id%TYPE;
@@ -17,7 +15,6 @@ BEGIN
   v_event_id := NEW.event_id;
   v_division_id := NEW.division_id;
   v_num_rounds := NEW.num_rounds;
-  
 
   IF (v_num_rounds = 1) THEN
     INSERT INTO ss_round_details (event_id, division_id, round_name, num_heats) 
@@ -53,7 +50,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$function$ LANGUAGE plpgsql;
 
 
 
