@@ -55,7 +55,7 @@ BEGIN
     END IF;
     RETURN NEW;
 END;
-$function$
+$function$;
 
 
 -- CREATE OR REPLACE FUNCTION handle_update_on_event_division()

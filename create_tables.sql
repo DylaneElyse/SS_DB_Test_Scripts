@@ -1,4 +1,5 @@
--- Active: 1749478571723@@127.0.0.1@5432@ss_test_db@public
+-- 1. ss_roles
+-- 2. ss_users
 -- 3. ss_disciplines
 -- 4. ss_division
 -- 5. ss_athletes
@@ -90,7 +91,7 @@ CREATE TABLE ss_events (
     FOREIGN KEY (discipline_id) REFERENCES ss_disciplines(discipline_id) ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
--- 7. Event Divisions (Junction Table)
+-- 7. Event Divisions
 CREATE TABLE ss_event_divisions (
     event_id integer NOT NULL,
     division_id integer NOT NULL,
@@ -100,7 +101,7 @@ CREATE TABLE ss_event_divisions (
     FOREIGN KEY (division_id) REFERENCES ss_division(division_id) ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
--- 8. Round Details Table (Rounds within an Event Division)
+-- 8. Round Details Table
 CREATE TABLE ss_round_details (
     event_id integer NOT NULL,
     division_id integer NOT NULL,
@@ -111,7 +112,7 @@ CREATE TABLE ss_round_details (
     FOREIGN KEY (event_id, division_id) REFERENCES ss_event_divisions(event_id, division_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
--- 9. Heat Details (Heats within a Division Round)
+-- 9. Heat Details
 CREATE TABLE ss_heat_details (
     round_heat_id SERIAL PRIMARY KEY,
     heat_num integer NOT NULL,
@@ -120,7 +121,7 @@ CREATE TABLE ss_heat_details (
     FOREIGN KEY (round_id) REFERENCES ss_round_details(round_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
--- 10. Event Registrations (Junction Table)
+-- 10. Event Registrations
 CREATE TABLE ss_event_registrations (
     event_id integer NOT NULL,
     division_id integer NOT NULL,
@@ -162,18 +163,16 @@ CREATE TABLE ss_run_results (
 
 -- 13. Event Judges
 CREATE TABLE ss_event_judges (
+    personnel_id SERIAL PRIMARY KEY,
     event_id integer NOT NULL,
-    personnel_id SERIAL NOT NULL,
     header VARCHAR(50) NOT NULL,
     name VARCHAR(100),
-    passcode CHAR(4) NOT NULL DEFAULT generate_random_4_digit_code(),
-    PRIMARY KEY (event_id, personnel_id),
-    UNIQUE (personnel_id),
+    passcode CHAR(4) NOT NULL,
     UNIQUE (passcode),
     FOREIGN KEY (event_id) REFERENCES ss_events(event_id) ON DELETE CASCADE ON UPDATE CASCADE 
 );
 
--- 14. Run Scores (No change needed here if Option 1 for ss_event_judges is used)
+-- 14. Run Scores
 CREATE TABLE ss_run_scores (
     personnel_id integer NOT NULL,
     run_result_id integer NOT NULL,

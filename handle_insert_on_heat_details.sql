@@ -35,7 +35,41 @@ BEGIN
 
     RETURN NEW;
 END;
-$function$
+$function$;
+
+
+-- DB:
+-- CREATE OR REPLACE FUNCTION handle_insert_on_heat_details()
+--   RETURNS TRIGGER AS $trigger$
+-- DECLARE
+--     v_event_id INTEGER;
+--     v_division_id INTEGER;
+-- BEGIN
+--     SELECT rd.event_id, rd.division_id
+--     INTO v_event_id, v_division_id
+--     FROM ss_round_details AS rd
+--     WHERE rd.round_id = NEW.round_id;
+
+--     INSERT INTO ss_heat_results (heat_id, registration_id)
+--     SELECT
+--         NEW.heat_id,         
+--         reg.registration_id  
+--     FROM ss_event_registrations AS reg
+--     WHERE reg.event_id = v_event_id AND reg.division_id = v_division_id
+--     ON CONFLICT (heat_id, registration_id) DO NOTHING;
+
+--     IF NOT FOUND THEN
+--         RAISE NOTICE 'Heat created (heat_id=%), but no registered athletes were found to add to it.', NEW.heat_id;
+--     END IF;
+
+--     CALL reseed_heat(NEW.heat_id);
+
+--     RETURN NULL;
+-- END;
+-- $trigger$ LANGUAGE plpgsql;
+
+
+
 
 -- CREATE OR REPLACE FUNCTION handle_insert_on_heat_details()
 -- RETURNS TRIGGER AS $$

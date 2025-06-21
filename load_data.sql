@@ -70,7 +70,7 @@ ON CONFLICT (athlete_id) DO NOTHING;
 
 INSERT INTO ss_events(event_id, name, start_date, end_date, location, discipline_id, status) VALUES
   (7, 'Winter Gravity Games - Snowboard Half-Pipe', '2025-04-18', '2025-04-20', 'Winsport', 'FREE_HP_SBD', 'Scheduled'),
-  (8, 'Test', '2025-04-16', '2025-04-20', 'Calgary', 'NORD_JUMP_SKI', 'Scheduled'),
+  (8, 'Test', '2025-04-16', '2025-04-20', 'Calgary', 'FREE_SS_SKI', 'Scheduled'),
   (9, 'Test (past)', '2025-04-08', '2025-04-10', 'Calgary', 'FREE_HP_SBD', 'Scheduled')
 ON CONFLICT DO NOTHING;
 
