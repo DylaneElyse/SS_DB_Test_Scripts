@@ -44,3 +44,7 @@ WHERE round_heat_id = 23;
 
 INSERT INTO ss_athletes (first_name, last_name, dob, gender)
 VALUES ('John', 'Doe', '1990-01-01', 'M');
+
+UPDATE ss_event_divisions
+SET num_rounds = 1
+WHERE event_id = 9 AND division_id = 2;

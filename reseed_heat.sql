@@ -60,7 +60,7 @@ BEGIN
   EXECUTE v_sql USING p_round_heat_id;
 
 END;
-$procedure$
+$procedure$;
 
 
 -- CREATE OR REPLACE PROCEDURE reseed_heat(p_round_heat_id INTEGER)

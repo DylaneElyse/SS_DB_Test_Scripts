@@ -59,6 +59,9 @@ CREATE OR REPLACE FUNCTION handle_update_on_event_division()
   RETURNS trigger AS $function$
 BEGIN
     IF NEW.num_rounds IS DISTINCT FROM OLD.num_rounds THEN
+      DELETE FROM ss_round_details
+      WHERE event_id = NEW.event_id AND division_id = NEW.division_id;
+
       DECLARE
         v_event_id ss_round_details.event_id%TYPE;
         v_division_id ss_round_details.division_id%TYPE;
