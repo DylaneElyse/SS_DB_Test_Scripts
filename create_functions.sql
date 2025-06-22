@@ -153,10 +153,8 @@ $trigger$ LANGUAGE plpgsql;
 
 
 -- 5.
-CREATE OR REPLACE FUNCTION public.handle_insert_on_heat_details()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION handle_insert_on_heat_details()
+  RETURNS TRIGGER AS $function$
 BEGIN
     INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id, seeding)
     SELECT
@@ -188,7 +186,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$function$;
+$function$ LANGUAGE plpgsql;
 
 
 -- 6.
@@ -227,10 +225,8 @@ $trigger$ LANGUAGE plpgsql;
 
 
 -- 7.
-CREATE OR REPLACE FUNCTION public.handle_insert_on_event_registrations()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION handle_insert_on_event_registrations()
+  RETURNS TRIGGER AS $function$
 BEGIN
     INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id, seeding)
     SELECT
@@ -254,14 +250,12 @@ BEGIN
 
     RETURN NEW;
 END;
-$function$;
+$function$ LANGUAGE plpgsql;
 
 
 -- 8.
-CREATE OR REPLACE FUNCTION public.handle_update_on_event_registrations()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION handle_update_on_event_registrations()
+  RETURNS TRIGGER AS $function$
 BEGIN
     IF NEW.event_id IS DISTINCT FROM OLD.event_id OR NEW.division_id IS DISTINCT FROM OLD.division_id THEN
         DELETE FROM ss_heat_results AS shr
@@ -295,10 +289,54 @@ BEGIN
 
     RETURN NEW;
 END;
-$function$;
+$function$ LANGUAGE plpgsql;
 
 
 -- 9.
+CREATE OR REPLACE FUNCTION reseed_affected_heats()
+  RETURNS TRIGGER AS $function$
+DECLARE
+    v_round_heat_id INTEGER;
+BEGIN
+    FOR v_round_heat_id IN
+        SELECT DISTINCT hd.round_heat_id
+        FROM new_rows AS nr 
+        INNER JOIN ss_round_details AS rd ON nr.event_id = rd.event_id AND nr.division_id = rd.division_id
+        INNER JOIN ss_heat_details AS hd ON rd.round_id = hd.round_id
+    LOOP
+        CALL reseed_heat(v_round_heat_id);
+    END LOOP;
+    RETURN NULL; 
+END;
+$function$ LANGUAGE plpgsql;
+
+
+-- 10.
+CREATE OR REPLACE FUNCTION reseed_after_update()
+  RETURNS TRIGGER AS $trigger$
+DECLARE
+    v_round_heat_id INTEGER;
+BEGIN
+    FOR v_round_heat_id IN
+        SELECT DISTINCT hd.round_heat_id
+        FROM old_rows AS o
+        JOIN ss_round_details AS rd ON rd.event_id = o.event_id AND rd.division_id = o.division_id
+        JOIN ss_heat_details AS hd ON hd.round_id = rd.round_id
+        UNION
+        SELECT DISTINCT hd.heat_id
+        FROM new_rows AS n
+        JOIN ss_round_details AS rd ON rd.event_id = n.event_id AND rd.division_id = n.division_id
+        JOIN ss_heat_details AS hd ON hd.round_id = rd.round_id
+    LOOP
+        CALL reseed_heat(v_round_heat_id);
+    END LOOP;
+
+    RETURN NULL;
+END;
+$trigger$ LANGUAGE plpgsql;
+
+
+-- 11.
 CREATE OR REPLACE FUNCTION handle_insert_on_heat_results()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -326,11 +364,9 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- 10.
-CREATE OR REPLACE FUNCTION public.handle_update_on_heat_results()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+-- 12.
+CREATE OR REPLACE FUNCTION handle_update_on_heat_results()
+  RETURNS TRIGGER AS $function$
 BEGIN
     IF NEW.event_id IS DISTINCT FROM OLD.event_id OR
        NEW.division_id IS DISTINCT FROM OLD.division_id OR
@@ -350,392 +386,109 @@ BEGIN
 
     RETURN NULL;
 END;
-$function$;
-
-
-
-
-
--- 11.
--- CREATE OR REPLACE FUNCTION handle_update_on_event_judges()
---   RETURNS TRIGGER AS $trigger$
--- BEGIN
---     IF NEW.personnel_id IS DISTINCT FROM OLD.personnel_id THEN
---         UPDATE ss_run_scores
---         SET personnel_id = NEW.personnel_id
---         WHERE personnel_id = OLD.personnel_id
---           AND run_result_id IN (
---             SELECT r.run_result_id
---             FROM ss_run_results AS r
---             JOIN ss_heat_details AS hd ON r.heat_id = hd.heat_id
---             JOIN ss_round_details AS rd ON hd.round_id = rd.round_id
---             WHERE rd.event_id = NEW.event_id
---         );
---     END IF;
-
---     IF NEW.event_id IS DISTINCT FROM OLD.event_id THEN
---         DELETE FROM ss_run_scores
---         WHERE personnel_id = OLD.personnel_id
---           AND run_result_id IN (
---             SELECT r.run_result_id
---             FROM ss_run_results AS r
---             JOIN ss_heat_details AS hd ON r.heat_id = hd.heat_id
---             JOIN ss_round_details AS rd ON hd.round_id = rd.round_id
---             WHERE rd.event_id = OLD.event_id
---         );
-
---         INSERT INTO ss_run_scores (personnel_id, run_result_id)
---         SELECT
---             NEW.personnel_id,
---             r.run_result_id
---         FROM
---             ss_run_results AS r
---             JOIN ss_heat_details AS hd ON r.heat_id = hd.heat_id
---             JOIN ss_round_details AS rd ON hd.round_id = rd.round_id
---         WHERE
---             rd.event_id = NEW.event_id
---         ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
---     END IF;
-
---     RETURN NULL;
--- END;
--- $trigger$ LANGUAGE plpgsql;
-
-
--- 12.
--- DB:
-CREATE OR REPLACE FUNCTION public.handle_update_on_event_judges()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
-BEGIN
-    IF NEW.personnel_id IS DISTINCT FROM OLD.personnel_id THEN
-        UPDATE ss_run_scores
-        SET personnel_id = NEW.personnel_id
-        WHERE personnel_id = OLD.personnel_id
-          AND run_result_id IN (
-            SELECT run_result_id FROM ss_run_results WHERE event_id = NEW.event_id
-        );
-    END IF;
-
-    IF NEW.event_id IS DISTINCT FROM OLD.event_id THEN
-        DELETE FROM ss_run_scores
-        WHERE personnel_id = OLD.personnel_id
-          AND run_result_id IN (
-            SELECT run_result_id FROM ss_run_results WHERE event_id = OLD.event_id
-        );
-
-        INSERT INTO ss_run_scores (personnel_id, run_result_id)
-        SELECT
-            NEW.personnel_id,
-            r.run_result_id
-        FROM ss_run_results AS r
-        WHERE r.event_id = NEW.event_id
-        ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
-    END IF;
-
-    RETURN NULL;
-END;
-$function$;
-
+$function$ LANGUAGE plpgsql;
 
 
 -- 13.
-CREATE OR REPLACE FUNCTION reseed_after_update()
-  RETURNS TRIGGER AS $trigger$
-DECLARE
-    v_heat_id INTEGER;
+CREATE OR REPLACE FUNCTION handle_insert_on_event_judges()
+RETURNS TRIGGER AS $$
 BEGIN
-    FOR v_heat_id IN
-        SELECT DISTINCT hd.heat_id
-        FROM old_rows AS o
-        JOIN ss_round_details AS rd ON rd.event_id = o.event_id AND rd.division_id = o.division_id
-        JOIN ss_heat_details AS hd ON hd.round_id = rd.round_id
-        UNION
-        SELECT DISTINCT hd.heat_id
-        FROM new_rows AS n
-        JOIN ss_round_details AS rd ON rd.event_id = n.event_id AND rd.division_id = n.division_id
-        JOIN ss_heat_details AS hd ON hd.round_id = rd.round_id
-    LOOP
-        CALL reseed_heat(v_heat_id);
-    END LOOP;
-
-    RETURN NULL;
-END;
-$trigger$ LANGUAGE plpgsql;
-
--- DB:
--- CREATE OR REPLACE FUNCTION public.reseed_after_update()
---  RETURNS trigger
---  LANGUAGE plpgsql
--- AS $function$
--- DECLARE
---     v_heat_id INTEGER;
--- BEGIN
---     FOR v_heat_id IN
---         SELECT DISTINCT hd.heat_id
---         FROM old_rows AS o
---         JOIN ss_round_details AS rd ON rd.event_id = o.event_id AND rd.division_id = o.division_id
---         JOIN ss_heat_details AS hd ON hd.round_id = rd.round_id
---         UNION
---         SELECT DISTINCT hd.heat_id
---         FROM new_rows AS n
---         JOIN ss_round_details AS rd ON rd.event_id = n.event_id AND rd.division_id = n.division_id
---         JOIN ss_heat_details AS hd ON hd.round_id = rd.round_id
---     LOOP
---         CALL reseed_heat(v_heat_id);
---     END LOOP;
-
---     RETURN NULL;
--- END;
--- $function$;
-
--- 14.
-CREATE OR REPLACE FUNCTION public.reseed_affected_heats()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
-DECLARE
-    v_heat_id INTEGER;
-BEGIN
-    FOR v_heat_id IN
-        SELECT DISTINCT hd.round_heat_id
-        FROM new_rows AS nr 
-        INNER JOIN ss_round_details AS rd ON nr.event_id = rd.event_id AND nr.division_id = rd.division_id
-        INNER JOIN ss_heat_details AS hd ON rd.round_id = hd.round_id
-    LOOP
-        CALL reseed_heat(v_heat_id);
-    END LOOP;
-    RETURN NULL; 
-END;
-$function$;
-
--- DB:
--- CREATE OR REPLACE FUNCTION public.reseed_affected_heats()
---  RETURNS trigger
---  LANGUAGE plpgsql
--- AS $function$
--- DECLARE
---     v_heat_id INTEGER;
--- BEGIN
---     FOR v_heat_id IN
---         SELECT DISTINCT hd.heat_id
---         FROM new_rows AS nr
---         INNER JOIN ss_round_details AS rd
---             ON nr.event_id = rd.event_id AND nr.division_id = rd.division_id
---         INNER JOIN ss_heat_details AS hd
---             ON rd.round_id = hd.round_id
---     LOOP
---         CALL reseed_heat(v_heat_id);
---     END LOOP;
-
---     RETURN NULL;
--- END;
--- $function$;
-
-
-
--- 15.
-
--- 16.
-CREATE OR REPLACE FUNCTION handle_insert_on_run_results()
-  RETURNS TRIGGER AS $trigger$
-DECLARE
-    v_event_id INTEGER;
-BEGIN
-    SELECT rd.event_id INTO v_event_id
-    FROM ss_heat_details AS hd
-    JOIN ss_round_details AS rd ON hd.round_id = rd.round_id
-    WHERE hd.heat_id = NEW.heat_id;
-
     INSERT INTO ss_run_scores (personnel_id, run_result_id)
     SELECT
-        j.personnel_id,
-        NEW.run_result_id
-    FROM ss_event_judges AS j
-    WHERE j.event_id = v_event_id
+        NEW.personnel_id,
+        r.run_result_id
+    FROM
+        ss_run_results AS r
+    WHERE
+        r.event_id = NEW.event_id
+
     ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
 
     RETURN NULL;
 END;
-$trigger$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
 
--- 17.
-CREATE OR REPLACE FUNCTION handle_update_on_run_results()
-  RETURNS TRIGGER AS $trigger$
-DECLARE
-    v_old_event_id INTEGER;
-    v_new_event_id INTEGER;
-BEGIN
-    SELECT rd.event_id INTO v_new_event_id
-    FROM ss_heat_details hd JOIN ss_round_details rd ON hd.round_id = rd.round_id
-    WHERE hd.heat_id = NEW.heat_id;
-
-    SELECT rd.event_id INTO v_old_event_id
-    FROM ss_heat_details hd JOIN ss_round_details rd ON hd.round_id = rd.round_id
-    WHERE hd.heat_id = OLD.heat_id;
-
-    IF v_new_event_id IS DISTINCT FROM v_old_event_id THEN
-        DELETE FROM ss_run_scores
-        WHERE run_result_id = OLD.run_result_id;
-
-        INSERT INTO ss_run_scores (personnel_id, run_result_id)
-        SELECT
-            j.personnel_id,
-            NEW.run_result_id
-        FROM ss_event_judges AS j
-        WHERE j.event_id = v_new_event_id
-        ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
-    END IF;
-
-    RETURN NULL;
-END;
-$trigger$ LANGUAGE plpgsql;
-
--- DB:
--- CREATE OR REPLACE FUNCTION public.handle_update_on_run_results()
---  RETURNS trigger
---  LANGUAGE plpgsql
--- AS $function$
--- BEGIN
---     IF NEW.run_result_id IS DISTINCT FROM OLD.run_result_id OR NEW.event_id IS DISTINCT FROM OLD.event_id THEN
---         DELETE FROM ss_run_scores
---         WHERE run_result_id = OLD.run_result_id;
-
---         INSERT INTO ss_run_scores (personnel_id, run_result_id)
---         SELECT
---             j.personnel_id,
---             NEW.run_result_id
---         FROM ss_event_judges AS j
---         WHERE j.event_id = NEW.event_id
---         ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
---     END IF;
-
---     RETURN NULL;
--- END;
--- $function$;
-
--- 18.
-CREATE OR REPLACE FUNCTION manage_judge_deletion_with_cleanup()
-  RETURNS TRIGGER AS $trigger$
-DECLARE
-    v_has_scored_rows BOOLEAN;
-BEGIN
-    SELECT EXISTS (
-        SELECT 1
-        FROM ss_run_scores AS s
-        JOIN ss_run_results AS r ON s.run_result_id = r.run_result_id
-        JOIN ss_heat_details AS hd ON r.heat_id = hd.heat_id
-        JOIN ss_round_details AS rd ON hd.round_id = rd.round_id
-        WHERE s.personnel_id = OLD.personnel_id
-          AND rd.event_id = OLD.event_id 
-          AND s.score IS NOT NULL
-    ) INTO v_has_scored_rows;
-
-    IF v_has_scored_rows THEN
-        RAISE EXCEPTION 'Cannot remove Judge (ID: %): They have submitted scores for event (ID: %).',
-            OLD.personnel_id, OLD.event_id;
-    END IF;
-    
-    RETURN OLD;
-END;
-$trigger$ LANGUAGE plpgsql;
-
--- DB:
--- CREATE OR REPLACE FUNCTION public.manage_judge_deletion_with_cleanup()
---  RETURNS trigger
---  LANGUAGE plpgsql
--- AS $function$
--- DECLARE
---     v_has_scored_rows         BOOLEAN := FALSE;
---     v_deleted_null_scores_count INT;
--- BEGIN
---     SELECT EXISTS (
---         SELECT 1
---         FROM ss_run_scores AS s
---         JOIN ss_run_results AS r ON s.run_result_id = r.run_result_id
---         WHERE s.personnel_id = OLD.personnel_id
---           AND r.event_id = OLD.event_id
---           AND s.score IS NOT NULL
---     ) INTO v_has_scored_rows;
-
---     WITH deleted_rows AS (
---         DELETE FROM ss_run_scores AS s
---         USING ss_run_results AS r
---         WHERE s.run_result_id = r.run_result_id
---           AND s.personnel_id = OLD.personnel_id
---           AND r.event_id = OLD.event_id
---           AND s.score IS NULL
---         RETURNING 1
---     )
---     SELECT count(*)
---     INTO v_deleted_null_scores_count
---     FROM deleted_rows;
-
---     RAISE NOTICE 'Cleanup phase: Deleted % placeholder score row(s) for Judge (ID: %).',
---         v_deleted_null_scores_count, OLD.personnel_id;
-
---     IF v_has_scored_rows THEN
---         RAISE EXCEPTION 'Cannot remove Judge (ID: %): They have submitted scores. % placeholder scores were cleaned up, but the judge was NOT removed from the event.',
---             OLD.personnel_id, v_deleted_null_scores_count;
---     ELSE
---         RAISE NOTICE 'No submitted scores found for Judge (ID: %). Proceeding with deletion from event.', OLD.personnel_id;
---         RETURN OLD;
---     END IF;
--- END;
--- $function$;
-
--- 19.
+-- 14.
 CREATE OR REPLACE FUNCTION prevent_invalid_judge_update()
-  RETURNS TRIGGER AS $trigger$
+ RETURNS TRIGGER AS $function$
 BEGIN
-    IF NEW.event_id IS DISTINCT FROM OLD.event_id THEN
+    IF NEW.personnel_id IS DISTINCT FROM OLD.personnel_id OR NEW.event_id IS DISTINCT FROM OLD.event_id THEN
         IF EXISTS (
             SELECT 1
             FROM ss_run_scores AS s
             JOIN ss_run_results AS r ON s.run_result_id = r.run_result_id
-            JOIN ss_heat_details AS hd ON r.heat_id = hd.heat_id
-            JOIN ss_round_details AS rd ON hd.round_id = rd.round_id
             WHERE s.personnel_id = OLD.personnel_id
-              AND rd.event_id = OLD.event_id 
+              AND r.event_id = OLD.event_id
               AND s.score IS NOT NULL
         ) THEN
-            RAISE EXCEPTION 'Update failed. Judge (ID: %) cannot be moved from event (ID: %) because they have already submitted scores.',
+            RAISE EXCEPTION 'Update failed. Judge (ID: %) cannot be removed from event (ID: %) because they have already submitted scores.',
                 OLD.personnel_id, OLD.event_id;
         END IF;
     END IF;
 
     RETURN NEW;
 END;
-$trigger$ LANGUAGE plpgsql;
-
--- DB:
--- CREATE OR REPLACE FUNCTION public.prevent_invalid_judge_update()
---  RETURNS trigger
---  LANGUAGE plpgsql
--- AS $function$
--- BEGIN
---     IF NEW.personnel_id IS DISTINCT FROM OLD.personnel_id OR NEW.event_id IS DISTINCT FROM OLD.event_id THEN
---         IF EXISTS (
---             SELECT 1
---             FROM ss_run_scores AS s
---             JOIN ss_run_results AS r ON s.run_result_id = r.run_result_id
---             WHERE s.personnel_id = OLD.personnel_id
---               AND r.event_id = OLD.event_id
---               AND s.score IS NOT NULL
---         ) THEN
---             RAISE EXCEPTION 'Update failed. Judge (ID: %) cannot be removed from event (ID: %) because they have already submitted scores.',
---                 OLD.personnel_id, OLD.event_id;
---         END IF;
---     END IF;
-
---     RETURN NEW;
--- END;
--- $function$;
+$function$ LANGUAGE plpgsql;
 
 
--- 20.
+-- 15.
+CREATE OR REPLACE FUNCTION manage_judge_deletion_with_cleanup()
+  RETURNS TRIGGER AS $function$
+DECLARE
+    v_has_scored_rows         BOOLEAN := FALSE;
+    v_deleted_null_scores_count INT;
+BEGIN
+    SELECT EXISTS (
+        SELECT 1
+        FROM ss_run_scores AS s
+        JOIN ss_run_results AS r ON s.run_result_id = r.run_result_id
+        WHERE s.personnel_id = OLD.personnel_id
+          AND r.event_id = OLD.event_id
+          AND s.score IS NOT NULL
+    ) INTO v_has_scored_rows;
+
+    WITH deleted_rows AS (
+        DELETE FROM ss_run_scores AS s
+        USING ss_run_results AS r
+        WHERE s.run_result_id = r.run_result_id
+          AND s.personnel_id = OLD.personnel_id
+          AND r.event_id = OLD.event_id
+          AND s.score IS NULL
+        RETURNING 1
+    )
+    SELECT count(*)
+    INTO v_deleted_null_scores_count
+    FROM deleted_rows;
+
+    RAISE NOTICE 'Cleanup phase: Deleted % placeholder score row(s) for Judge (ID: %).',
+        v_deleted_null_scores_count, OLD.personnel_id;
+
+    IF v_has_scored_rows THEN
+        RAISE EXCEPTION 'Cannot remove Judge (ID: %): They have submitted scores. % placeholder scores were cleaned up, but the judge was NOT removed from the event.',
+            OLD.personnel_id, v_deleted_null_scores_count;
+    ELSE
+        RAISE NOTICE 'No submitted scores found for Judge (ID: %). Proceeding with deletion from event.', OLD.personnel_id;
+        RETURN OLD;
+    END IF;
+END;
+$function$ LANGUAGE plpgsql;
+
+
+-- 16.
+CREATE OR REPLACE FUNCTION set_judge_passcode_if_null()
+  RETURNS TRIGGER AS $function$
+BEGIN
+    IF NEW.passcode IS NULL THEN
+        NEW.passcode := generate_random_4_digit_code();
+    END IF;
+
+    RETURN NEW;
+END;
+$function$ LANGUAGE plpgsql;
+
+
+-- 17.
 CREATE OR REPLACE FUNCTION generate_random_4_digit_code()
   RETURNS TEXT AS $function$
 DECLARE
@@ -757,34 +510,18 @@ END;
 $function$ LANGUAGE plpgsql VOLATILE;
 
 
-
-
-CREATE OR REPLACE FUNCTION set_judge_passcode_if_null()
-  RETURNS TRIGGER AS $function$
-BEGIN
-    IF NEW.passcode IS NULL THEN
-        NEW.passcode := generate_random_4_digit_code();
-    END IF;
-
-    RETURN NEW;
-END;
-$function$ LANGUAGE plpgsql;
-
-
-
-
-
-CREATE OR REPLACE FUNCTION handle_insert_on_event_judges()
+-- 18.
+CREATE OR REPLACE FUNCTION handle_insert_on_run_results()
 RETURNS TRIGGER AS $$
 BEGIN
     INSERT INTO ss_run_scores (personnel_id, run_result_id)
     SELECT
-        NEW.personnel_id,
-        r.run_result_id
+        j.personnel_id,
+        NEW.run_result_id
     FROM
-        ss_run_results AS r
+        ss_event_judges AS j
     WHERE
-        r.event_id = NEW.event_id
+        j.event_id = NEW.event_id
 
     ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
 
@@ -792,25 +529,43 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- DB:
--- CREATE OR REPLACE FUNCTION public.handle_insert_on_event_judges()
---  RETURNS trigger
---  LANGUAGE plpgsql
--- AS $function$
--- BEGIN
---     INSERT INTO ss_run_scores (personnel_id, run_result_id)
---     SELECT
---         NEW.personnel_id, 
---         r.run_result_id   
---     FROM
---         ss_run_results AS r
---         JOIN ss_heat_details AS hd ON r.heat_id = hd.heat_id
---         JOIN ss_round_details AS rd ON hd.round_id = rd.round_id
---     WHERE
---         rd.event_id = NEW.event_id
---     ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
 
---     RETURN NULL;
--- END;
--- $function$;
+-- 19.
+CREATE OR REPLACE FUNCTION handle_update_on_run_results()
+  RETURNS TRIGGER AS $trigger$
+DECLARE
+    v_old_event_id INTEGER;
+    v_new_event_id INTEGER;
+BEGIN
+    SELECT rd.event_id INTO v_new_event_id
+    FROM ss_heat_details hd JOIN ss_round_details rd ON hd.round_id = rd.round_id
+    WHERE hd.round_heat_id = NEW.round_heat_id;
+
+    SELECT rd.event_id INTO v_old_event_id
+    FROM ss_heat_details hd JOIN ss_round_details rd ON hd.round_id = rd.round_id
+    WHERE hd.round_heat_id = OLD.round_heat_id;
+
+    IF v_new_event_id IS DISTINCT FROM v_old_event_id THEN
+        DELETE FROM ss_run_scores
+        WHERE run_result_id = OLD.run_result_id;
+
+        INSERT INTO ss_run_scores (personnel_id, run_result_id)
+        SELECT
+            j.personnel_id,
+            NEW.run_result_id
+        FROM ss_event_judges AS j
+        WHERE j.event_id = v_new_event_id
+        ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
+    END IF;
+
+    RETURN NULL;
+END;
+$trigger$ LANGUAGE plpgsql;
+
+
+
+
+
+
+
 
