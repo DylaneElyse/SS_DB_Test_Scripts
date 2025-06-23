@@ -48,3 +48,11 @@ VALUES ('John', 'Doe', '1990-01-01', 'M');
 UPDATE ss_event_divisions
 SET num_rounds = 1
 WHERE event_id = 9 AND division_id = 2;
+
+
+UPDATE ss_run_scores
+SET score = 85
+WHERE run_result_id = 1 AND personnel_id = 123;
+
+
+CALL calculate_average_score (1);
