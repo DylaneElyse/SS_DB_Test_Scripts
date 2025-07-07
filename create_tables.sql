@@ -106,6 +106,7 @@ CREATE TABLE ss_round_details (
     event_id integer NOT NULL,
     division_id integer NOT NULL,
     round_id SERIAL NOT NULL UNIQUE, 
+    round_num integer NOT NULL,
     round_name VARCHAR(100) NOT NULL DEFAULT 'Final',
     num_heats integer NOT NULL DEFAULT 1, 
     PRIMARY KEY (event_id, division_id, round_id),
