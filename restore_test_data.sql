@@ -379,12 +379,101 @@ VALUES
 (300, 4, 11, 15),
 (300, 4, 8, 17);
 
+-- Safety Check:
+SELECT
+    hr.athlete_id,
+    hr.round_heat_id AS current_round_heat_id,
+    target_heat.round_heat_id AS new_round_heat_id,
+    current_heat.round_id,
+    current_heat.heat_num AS current_heat_num,
+    target_heat.heat_num AS new_heat_num
+FROM
+    ss_heat_results AS hr
+JOIN
+    ss_heat_details AS current_heat ON hr.round_heat_id = current_heat.round_heat_id
+JOIN
+    ss_heat_details AS target_heat ON current_heat.round_id = target_heat.round_id
+WHERE
+    target_heat.heat_num = 2
+    AND hr.event_id = 100
+    AND hr.division_id = 3
+    AND hr.athlete_id IN (
+        34, 14, 21, 76, 51, 85, 4, 41, 38, 70,
+        37, 13, 71, 29, 56, 94, 75, 97, 7,
+        79, 89, 63, 49, 48, 27, 88
+    );
+
 
 UPDATE ss_heat_results
-SET round_heat_id = 22
-WHERE event_id = 100 AND division_id = 3 AND athlete_id IN (
-    34, 14, 21, 76, 51, 85, 4, 41, 38, 70,
-    37, 13, 71, 29, 56, 94, 75, 97, 7,
-    79, 89, 63, 49, 48, 27, 88
-);
+SET
+    round_heat_id = target_heat.round_heat_id
+FROM
+    ss_heat_details AS current_heat,
+    ss_heat_details AS target_heat 
+WHERE
+    ss_heat_results.round_heat_id = current_heat.round_heat_id
+
+    AND current_heat.round_id = target_heat.round_id
+    AND target_heat.heat_num = 1
+
+    AND ss_heat_results.event_id = 100
+    AND ss_heat_results.division_id = 3
+    AND ss_heat_results.athlete_id IN (
+        34, 14, 21, 76, 51, 85, 4, 41, 38, 
+        70, 37, 13, 71, 29, 56, 94, 75, 97, 
+        7, 79, 89, 63, 49, 48, 27, 88
+    );
+
+SELECT * FROM ss_heat_results
+JOIN ss_athletes ON ss_heat_results.athlete_id = ss_athletes.athlete_id
+WHERE event_id = 100 AND division_id = 3 AND round_heat_id = 45
+ORDER BY seeding;
+
+CALL balance_freestyle_heats(45);
+
+CALL reseed_heat(45);
+
+
+SELECT
+    hr.athlete_id,
+    hr.round_heat_id AS current_round_heat_id,
+    target_heat.round_heat_id AS new_round_heat_id,
+    current_heat.round_id,
+    current_heat.heat_num AS current_heat_num,
+    target_heat.heat_num AS new_heat_num
+FROM
+    ss_heat_results AS hr
+JOIN
+    ss_heat_details AS current_heat ON hr.round_heat_id = current_heat.round_heat_id
+JOIN
+    ss_heat_details AS target_heat ON current_heat.round_id = target_heat.round_id
+WHERE
+    target_heat.heat_num = 2
+    AND hr.event_id = 300
+    AND hr.division_id = 3
+    AND hr.athlete_id IN (
+        7, 14, 16, 27, 29, 31, 37, 38, 48, 49, 
+        55, 56, 59, 62, 64, 67, 70, 71, 79, 90
+    );
+
+UPDATE ss_heat_results
+SET
+    round_heat_id = target_heat.round_heat_id
+FROM
+    ss_heat_details AS current_heat,
+    ss_heat_details AS target_heat 
+WHERE
+    ss_heat_results.round_heat_id = current_heat.round_heat_id
+
+    AND current_heat.round_id = target_heat.round_id
+    AND target_heat.heat_num = 2
+
+    AND ss_heat_results.event_id = 300
+    AND ss_heat_results.division_id = 3
+    AND ss_heat_results.athlete_id IN (
+        7, 14, 16, 27, 29, 31, 37, 38, 48, 49, 
+        55, 56, 59, 62, 64, 67, 70, 71, 79, 90
+    );
+
+
 

@@ -68,56 +68,7 @@ END;
 $$;
 
 
-DROP TRIGGER IF EXISTS trg_run_scores_changed ON ss_run_scores;
-
-
-CREATE TRIGGER trg_run_scores_changed
-  AFTER INSERT OR UPDATE OR DELETE ON ss_run_scores
-  FOR EACH ROW
-  EXECUTE FUNCTION trg_start_score_calculation_chain();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
--- CREATE OR REPLACE PROCEDURE find_best_score(p_run_result_id INTEGER)
--- LANGUAGE plpgsql
--- AS $$
--- DECLARE
---     v_athlete_id INTEGER;
---     v_round_heat_id INTEGER;
---     v_best_score DECIMAL;
--- BEGIN
---     SELECT rr.athlete_id, rr.round_heat_id
---     INTO v_athlete_id, v_round_heat_id
---     FROM ss_run_results AS rr
---     WHERE rr.run_result_id = p_run_result_id;
-
---     IF NOT FOUND THEN
---         RAISE NOTICE 'No run result found for id %', p_run_result_id;
---         RETURN;
---     END IF;
-
---     SELECT MAX(rr.calc_score)
---     INTO v_best_score
---     FROM ss_run_results AS rr
---     WHERE rr.athlete_id = v_athlete_id AND rr.round_heat_id = v_round_heat_id;
-
---     UPDATE ss_heat_results
---     SET
---         best = v_best_score
---     WHERE
---         athlete_id = v_athlete_id AND round_heat_id = v_round_heat_id;
-
--- END;
--- $$;
+CREATE TRIGGER t_update_scores_after_change
+AFTER INSERT OR UPDATE OR DELETE ON ss_run_scores
+FOR EACH ROW
+EXECUTE FUNCTION trg_start_score_calculation_chain();

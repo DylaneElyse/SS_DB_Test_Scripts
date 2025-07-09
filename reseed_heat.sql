@@ -8,6 +8,7 @@ DECLARE
   v_points_column TEXT;
   v_sql           TEXT;
 BEGIN
+  -- Step 1: Find the discipline's subcategory for the given heat. (Unchanged)
   SELECT d.subcategory_name INTO v_subcategory
   FROM ss_heat_details AS hd
   JOIN ss_round_details AS rd ON hd.round_id = rd.round_id
@@ -21,22 +22,28 @@ BEGIN
     RETURN;
   END IF;
 
+  -- Step 2: Map the subcategory to the correct points column. (Unchanged)
   v_points_column := CASE v_subcategory
     WHEN 'Big Air'    THEN 'fis_ba_points'
     WHEN 'Slopestyle' THEN 'fis_ss_points'
     WHEN 'Halfpipe'   THEN 'fis_hp_points'
-    ELSE NULL 
+    ELSE NULL
   END;
 
   IF v_points_column IS NULL THEN
-    RAISE NOTICE 'reseed_heat: No seeding rule for subcategory "%".', v_subcategory;
+    RAISE NOTICE 'reseed_heat: No seeding rule for subcategory "%". Seeding will not be changed.', v_subcategory;
     RETURN;
   END IF;
 
+  -- Step 3: Build the dynamic SQL to update seeding.
   v_sql := format(
     'WITH new_seeding AS (
       SELECT
         hr.athlete_id,
+        -- Per your rules (higher points = better), we order by points ASCENDING.
+        -- This gives the lowest-ranked athlete (lowest points) seed #1.
+        -- This gives the HIGHEST-ranked athlete (highest points) the HIGHEST seed number,
+        -- so they start last.
         ROW_NUMBER() OVER (ORDER BY a.%I ASC, a.athlete_id ASC) AS new_seed_value
       FROM
         ss_heat_results hr
@@ -54,9 +61,11 @@ BEGIN
     WHERE
       ss_heat_results.athlete_id = new_seeding.athlete_id
       AND ss_heat_results.round_heat_id = $1;',
-    v_points_column 
+    v_points_column
   );
 
+  -- Step 4: Execute the dynamic SQL. (Unchanged)
+  RAISE NOTICE 'Reseeding heat % based on % points (best athlete starts last).', p_round_heat_id, v_points_column;
   EXECUTE v_sql USING p_round_heat_id;
 
 END;

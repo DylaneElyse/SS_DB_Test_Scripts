@@ -109,6 +109,8 @@ CREATE TABLE ss_round_details (
     round_num integer NOT NULL,
     round_name VARCHAR(100) NOT NULL DEFAULT 'Final',
     num_heats integer NOT NULL DEFAULT 1, 
+    round_sequence integer,
+    schedule_sequence integer,
     PRIMARY KEY (event_id, division_id, round_id),
     FOREIGN KEY (event_id, division_id) REFERENCES ss_event_divisions(event_id, division_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -119,6 +121,9 @@ CREATE TABLE ss_heat_details (
     heat_num integer NOT NULL,
     num_runs integer NOT NULL DEFAULT 3,
     round_id integer NOT NULL,
+    start_time TIMESTAMP,
+    end_time TIMESTAMP,
+    schedule_sequence integer,
     FOREIGN KEY (round_id) REFERENCES ss_round_details(round_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -140,7 +145,7 @@ CREATE TABLE ss_heat_results (
     event_id integer NOT NULL,  
     division_id integer NOT NULL,   
     athlete_id integer NOT NULL,
-    best DECIMAL,
+    best DECIMAL(10, 2),
     seeding DECIMAL,
     PRIMARY KEY (round_heat_id, event_id, division_id, athlete_id), 
     UNIQUE (round_heat_id, athlete_id),
@@ -156,7 +161,7 @@ CREATE TABLE ss_run_results (
     division_id integer NOT NULL,      
     athlete_id integer NOT NULL,
     run_num integer NOT NULL,
-    calc_score DECIMAL,
+    calc_score DECIMAL(10, 2),
     UNIQUE (round_heat_id, event_id, division_id, athlete_id, run_num),
     FOREIGN KEY (round_heat_id, event_id, division_id, athlete_id)
         REFERENCES ss_heat_results(round_heat_id, event_id, division_id, athlete_id) ON DELETE CASCADE ON UPDATE CASCADE
@@ -177,7 +182,7 @@ CREATE TABLE ss_event_judges (
 CREATE TABLE ss_run_scores (
     personnel_id integer NOT NULL,
     run_result_id integer NOT NULL,
-    score DECIMAL,
+    score DECIMAL(10, 2),
     PRIMARY KEY (personnel_id, run_result_id),
     FOREIGN KEY (personnel_id) REFERENCES ss_event_judges(personnel_id) ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY (run_result_id) REFERENCES ss_run_results(run_result_id) ON DELETE CASCADE ON UPDATE CASCADE
