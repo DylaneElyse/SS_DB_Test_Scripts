@@ -3,6 +3,60 @@ DELETE FROM ss_event_registrations;
 DELETE FROM ss_event_judges;
 DELETE FROM ss_athletes;
 
+
+INSERT INTO ss_roles (role_id, role_name) VALUES
+(1, 'Executive Director'),
+(2, 'Administrator'),
+(3, 'Chief of Competition'),
+(4, 'Technical Director'),
+(5, 'Head Judge'),
+(6, 'Volunteer'),
+(7, 'Coach')
+ON CONFLICT (role_id) DO NOTHING;
+
+INSERT INTO ss_users(user_id, first_name, last_name, email, role_id, auth_provider_user_id) VALUES
+  (1, 'Ryan', 'Howie', 'ryan.howie@edu.sait.ca', 2, 'user_2vkK4uWkGElV6eB1G3vULdHHJJY'),
+  (2, 'Rodrigo', 'Rangel', 'rodrigo.alvesrangel@edu.sait.ca', 2, 'user_2wmwgrzZ0MXGgRsQwdkSCOwb7pV'),
+  (3, 'Chris', 'Findlay',	'christopher.findlay@edu.sait.ca', 2, 'user_2wmwpP5GO0oTcQbzR6pJzvI8HQf'),
+  (4,	'Hammad', 'Mahmood', 'hammad.mahmood@edu.sait.ca', 2, 'user_2wmwtt0HWdhWiAWvMIcl12h0ynJ'),
+  (5, 'Anthony', 'Azimi', 'anthony.azimi@sait.ca', 2, 'user_2xSyx0DjSJiWYJkLcTPLxzNNgwP')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO ss_disciplines (discipline_id, category_name, subcategory_name, discipline_name) VALUES
+-- Freestyle
+('FREE_BA_SBD', 'Freestyle', 'Big Air', 'Snowboard'),
+('FREE_BA_SKI', 'Freestyle', 'Big Air', 'Ski'),
+('FREE_HP_SBD', 'Freestyle', 'Halfpipe', 'Snowboard'),
+('FREE_HP_SKI', 'Freestyle', 'Halfpipe', 'Ski'),
+('FREE_SS_SBD', 'Freestyle', 'Slopestyle', 'Snowboard'),
+('FREE_SS_SKI', 'Freestyle', 'Slopestyle', 'Ski'),
+('FREE_MOG_SKI', 'Freestyle', 'Moguls', 'Ski'),
+-- Alpine
+('ALP_DH_SKI', 'Alpine', 'Downhill', 'Ski'),
+('ALP_SG_SKI', 'Alpine', 'Super-G', 'Ski'),
+('ALP_GS_SKI', 'Alpine', 'Giant Slalom', 'Ski'),
+('ALP_SL_SKI', 'Alpine', 'Slalom', 'Ski'),
+('ALP_SBX_SBD', 'Alpine', 'Snowboard Cross', 'Snowboard'),
+('ALP_SKX_SKI', 'Alpine', 'Ski Cross', 'Ski'),
+-- Nordic
+('NORD_SP_SKI', 'Nordic', 'Sprint', 'Ski'),
+('NORD_DIST_SKI', 'Nordic', 'Distance', 'Ski'),
+('NORD_CP_SKI', 'Nordic', 'Combined Pursuit', 'Ski'),
+('NORD_JUMP_SKI', 'Nordic', 'Ski Jumping', 'Ski'),
+-- Other
+('SNOW_PS_SBD', 'Snowboard', 'Parallel Slalom', 'Snowboard'),
+('SNOW_PGS_SBD', 'Snowboard', 'Parallel Giant Slalom', 'Snowboard'),
+('FREESKI_BX_SKI', 'Freeski', 'Big Air', 'Ski')
+ON CONFLICT (discipline_id) DO NOTHING;
+
+INSERT INTO ss_division(division_id, division_name) VALUES
+  (1, 'Male'),
+  (2, 'Female'),
+  (3, 'Men'),
+  (4, 'Women')
+ON CONFLICT DO NOTHING;
+
+
 -- Data is accurate as of 2025-07-06
 
 INSERT INTO ss_athletes (athlete_id, last_name, first_name, dob, nationality, stance, gender, fis_num, fis_hp_points, fis_ss_points, fis_ba_points)
@@ -327,7 +381,7 @@ VALUES
 
 
 UPDATE ss_heat_results
-SET round_heat_id = 118
+SET round_heat_id = 22
 WHERE event_id = 100 AND division_id = 3 AND athlete_id IN (
     34, 14, 21, 76, 51, 85, 4, 41, 38, 70,
     37, 13, 71, 29, 56, 94, 75, 97, 7,

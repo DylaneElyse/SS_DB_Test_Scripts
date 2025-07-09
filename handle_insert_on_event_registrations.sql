@@ -5,30 +5,83 @@ CREATE OR REPLACE FUNCTION public.handle_insert_on_event_registrations()
  RETURNS trigger
  LANGUAGE plpgsql
 AS $function$
+DECLARE
+    target_round_heat_id INT;
 BEGIN
-    INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id, seeding)
+    IF EXISTS (
+        SELECT 1
+        FROM ss_heat_results hr
+        JOIN ss_heat_details hd ON hr.round_heat_id = hd.round_heat_id
+        JOIN ss_round_details rd ON hd.round_id = rd.round_id
+        WHERE hr.athlete_id = NEW.athlete_id
+          AND rd.event_id = NEW.event_id
+          AND rd.division_id = NEW.division_id
+    ) THEN
+        RAISE NOTICE 'Athlete ID % is already assigned to a heat for this event/division. No action taken.', NEW.athlete_id;
+        RETURN NEW;
+    END IF;
+
     SELECT
-        hd.round_heat_id, 
-        NEW.event_id,
-        NEW.division_id,
-        NEW.athlete_id,
-        0
+        hd.round_heat_id INTO target_round_heat_id
     FROM
-        ss_round_details rd
-        INNER JOIN ss_heat_details hd ON rd.round_id = hd.round_id
+        ss_round_details AS rd
+    JOIN
+        ss_heat_details AS hd ON rd.round_id = hd.round_id
+    LEFT JOIN
+        ss_heat_results AS hr ON hd.round_heat_id = hr.round_heat_id
     WHERE
         rd.event_id = NEW.event_id
         AND rd.division_id = NEW.division_id
-    ON CONFLICT (round_heat_id, athlete_id) DO NOTHING;
+    GROUP BY
+        hd.round_heat_id
+    ORDER BY
+        COUNT(hr.athlete_id) ASC, 
+        hd.round_heat_id ASC 
+    LIMIT 1;
 
-    IF NOT FOUND THEN
+    IF target_round_heat_id IS NULL THEN
         RAISE EXCEPTION 'Registration failed: No heats are defined for event_id=%, division_id=%.', NEW.event_id, NEW.division_id
         USING HINT = 'Please ensure that at least one round and one heat have been created for this event and division before registering athletes.';
     END IF;
 
+    INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id, seeding)
+    VALUES (target_round_heat_id, NEW.event_id, NEW.division_id, NEW.athlete_id, 0);
+
+    CALL reseed_heat(target_round_heat_id);
+
     RETURN NEW;
 END;
 $function$;
+
+
+-- CREATE OR REPLACE FUNCTION public.handle_insert_on_event_registrations()
+--  RETURNS trigger
+--  LANGUAGE plpgsql
+-- AS $function$
+-- BEGIN
+--     INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id, seeding)
+--     SELECT
+--         hd.round_heat_id, 
+--         NEW.event_id,
+--         NEW.division_id,
+--         NEW.athlete_id,
+--         0
+--     FROM
+--         ss_round_details rd
+--         INNER JOIN ss_heat_details hd ON rd.round_id = hd.round_id
+--     WHERE
+--         rd.event_id = NEW.event_id
+--         AND rd.division_id = NEW.division_id
+--     ON CONFLICT (round_heat_id, athlete_id) DO NOTHING;
+
+--     IF NOT FOUND THEN
+--         RAISE EXCEPTION 'Registration failed: No heats are defined for event_id=%, division_id=%.', NEW.event_id, NEW.division_id
+--         USING HINT = 'Please ensure that at least one round and one heat have been created for this event and division before registering athletes.';
+--     END IF;
+
+--     RETURN NEW;
+-- END;
+-- $function$;
 
 -- DB:
 -- CREATE OR REPLACE FUNCTION handle_insert_on_event_registrations()

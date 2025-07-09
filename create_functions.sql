@@ -1,57 +1,42 @@
 -- 1.
-CREATE OR REPLACE FUNCTION handle_insert_on_event_division()
-  RETURNS trigger AS $function$
+CREATE OR REPLACE FUNCTION public.handle_insert_on_event_division()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
 DECLARE
-  v_event_id ss_round_details.event_id%TYPE;
-  v_division_id ss_round_details.division_id%TYPE;
-  v_num_rounds ss_event_divisions.num_rounds%TYPE;
-  v_count INT; 
-  v_round_name TEXT; 
-
-  v_round_list_2 TEXT[] := ARRAY['Qualifications', 'Finals']; 
-  v_round_list_3 TEXT[] := ARRAY['Qualifications', 'Semi-Finals', 'Finals'];
-  v_round_list_4 TEXT[] := ARRAY['Qualifications', 'Quarter-Finals', 'Semi-Finals', 'Finals'];
-
+  v_num_rounds ss_event_divisions.num_rounds%TYPE := NEW.num_rounds;
+  v_count INT;
+  v_round_name TEXT;
+  v_round_list TEXT[];
 BEGIN
-  v_event_id := NEW.event_id;
-  v_division_id := NEW.division_id;
-  v_num_rounds := NEW.num_rounds;
+    IF EXISTS (SELECT 1 FROM ss_round_details WHERE event_id = NEW.event_id AND division_id = NEW.division_id) THEN
+        RAISE NOTICE 'Rounds for event_id=%, division_id=% already exist. Skipping creation.', NEW.event_id, NEW.division_id;
+        RETURN NEW; -- Exit gracefully
+    END IF;
 
-  IF (v_num_rounds = 1) THEN
-    INSERT INTO ss_round_details (event_id, division_id, round_name, num_heats) 
-      VALUES (v_event_id, v_division_id, 'Finals', DEFAULT); 
+    v_round_list := CASE v_num_rounds
+        WHEN 1 THEN ARRAY['Finals']
+        WHEN 2 THEN ARRAY['Qualifications', 'Finals']
+        WHEN 3 THEN ARRAY['Qualifications', 'Semi-Finals', 'Finals']
+        WHEN 4 THEN ARRAY['Qualifications', 'Quarter-Finals', 'Semi-Finals', 'Finals']
+        ELSE ARRAY[]::TEXT[]
+    END;
 
-  ELSEIF (v_num_rounds = 2) THEN
-    v_count := 1;
-    WHILE (v_count <= v_num_rounds) LOOP
-      v_round_name := v_round_list_2[v_count];
-      INSERT INTO ss_round_details (event_id, division_id, round_name, num_heats) 
-        VALUES (v_event_id, v_division_id, v_round_name, DEFAULT);
-      v_count := v_count + 1;
-    END LOOP;
+    IF array_length(v_round_list, 1) > 0 THEN
+      v_count := 1;
+      WHILE (v_count <= v_num_rounds) LOOP
+        v_round_name := v_round_list[v_count];
 
-  ELSEIF (v_num_rounds = 3) THEN
-    v_count := 1;
-    WHILE (v_count <= v_num_rounds) LOOP
-      v_round_name := v_round_list_3[v_count];
-      INSERT INTO ss_round_details (event_id, division_id, round_name, num_heats) 
-        VALUES (v_event_id, v_division_id, v_round_name, DEFAULT);
-      v_count := v_count + 1;
-    END LOOP; 
+        INSERT INTO ss_round_details (event_id, division_id, round_num, round_name, num_heats)
+          VALUES (NEW.event_id, NEW.division_id, v_count, v_round_name, 1); -- Default to 1 heat
 
-  ELSEIF (v_num_rounds = 4) THEN
-    v_count := 1;
-    WHILE (v_count <= v_num_rounds) LOOP
-      v_round_name := v_round_list_4[v_count];
-      INSERT INTO ss_round_details (event_id, division_id, round_name, num_heats) 
-        VALUES (v_event_id, v_division_id, v_round_name, DEFAULT);
-      v_count := v_count + 1;
-    END LOOP; 
-  END IF;
+        v_count := v_count + 1;
+      END LOOP;
+    END IF;
 
   RETURN NEW;
 END;
-$function$ LANGUAGE plpgsql;
+$function$;
 
 
 -- 2.
@@ -117,20 +102,26 @@ $function$ LANGUAGE plpgsql;
 
 
 -- 3.
-CREATE OR REPLACE FUNCTION handle_insert_on_round_details()
-  RETURNS TRIGGER AS $trigger$
+CREATE OR REPLACE FUNCTION public.handle_insert_on_round_details()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  v_count INT;
 BEGIN
-    IF NEW.num_heats > 0 THEN
-        INSERT INTO ss_heat_details (round_id, heat_num)
-        SELECT
-            NEW.round_id, 
-            i     
-        FROM generate_series(1, NEW.num_heats) AS i;
+    IF NEW.num_heats IS NOT NULL AND NEW.num_heats > 0 THEN
+      v_count := 1;
+      WHILE (v_count <= NEW.num_heats) LOOP
+        INSERT INTO ss_heat_details (heat_num, num_runs, round_id)
+          VALUES (v_count, DEFAULT, NEW.round_id);
+
+        v_count := v_count + 1;
+      END LOOP;
     END IF;
 
-    RETURN NULL;
+  RETURN NEW;
 END;
-$trigger$ LANGUAGE plpgsql;
+$function$;
 
 
 -- 4.
@@ -156,40 +147,50 @@ $trigger$ LANGUAGE plpgsql;
 
 
 -- 5.
-CREATE OR REPLACE FUNCTION handle_insert_on_heat_details()
-  RETURNS TRIGGER AS $function$
+CREATE OR REPLACE FUNCTION public.handle_insert_on_heat_details()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
 BEGIN
     INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id, seeding)
     SELECT
-        NEW.round_heat_id,
-        rd.event_id,
-        rd.division_id,
-        reg.athlete_id,
-        0
+        NEW.round_heat_id,      
+        candidate.event_id,
+        candidate.division_id,
+        candidate.athlete_id,
+        0                       
     FROM
-        ss_event_registrations AS reg
-    INNER JOIN ss_round_details AS rd ON reg.event_id = rd.event_id AND reg.division_id = rd.division_id
+        (
+            SELECT
+                reg.athlete_id,
+                rd.event_id,
+                rd.division_id
+            FROM ss_event_registrations AS reg
+            JOIN ss_round_details AS rd ON reg.event_id = rd.event_id AND reg.division_id = rd.division_id
+            WHERE rd.round_id = NEW.round_id
+        ) AS candidate
+
+    LEFT JOIN
+        (
+            SELECT DISTINCT hr.athlete_id 
+            FROM ss_heat_results AS hr
+            JOIN ss_heat_details AS hd ON hr.round_heat_id = hd.round_heat_id
+            WHERE hd.round_id = NEW.round_id
+        ) AS existing_athlete ON candidate.athlete_id = existing_athlete.athlete_id
+
     WHERE
-        rd.round_id = NEW.round_id
-        AND NOT EXISTS (
-            SELECT 1
-            FROM ss_heat_results AS existing_hr
-            INNER JOIN ss_heat_details AS existing_hd ON existing_hr.round_heat_id = existing_hd.round_heat_id
-            WHERE
-                existing_hd.round_id = NEW.round_id 
-                AND existing_hr.athlete_id = reg.athlete_id 
-        )
-    ON CONFLICT (round_heat_id, athlete_id) DO NOTHING;
+        existing_athlete.athlete_id IS NULL;
+
 
     IF NOT FOUND THEN
-        RAISE NOTICE 'Heat created (round_heat_id=%), but no available athletes were found to add.', NEW.round_heat_id;
+        RAISE NOTICE 'Heat created (round_heat_id=%), but no available athletes were found to add (all may be assigned already).', NEW.round_heat_id;
     END IF;
 
     CALL reseed_heat(NEW.round_heat_id);
 
     RETURN NEW;
 END;
-$function$ LANGUAGE plpgsql;
+$function$;
 
 
 -- 6.
