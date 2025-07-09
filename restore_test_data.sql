@@ -414,7 +414,7 @@ WHERE
     ss_heat_results.round_heat_id = current_heat.round_heat_id
 
     AND current_heat.round_id = target_heat.round_id
-    AND target_heat.heat_num = 1
+    AND target_heat.heat_num = 2
 
     AND ss_heat_results.event_id = 100
     AND ss_heat_results.division_id = 3
@@ -431,7 +431,13 @@ ORDER BY seeding;
 
 CALL balance_freestyle_heats(45);
 
+CALL reseed_heat(39);
+CALL reseed_heat(40);
+CALL reseed_heat(41);
+CALL reseed_heat(44);
 CALL reseed_heat(45);
+CALL reseed_heat(46);
+CALL reseed_heat(47);
 
 
 SELECT
