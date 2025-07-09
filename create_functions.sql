@@ -1,13 +1,12 @@
 -- 1.
-CREATE OR REPLACE FUNCTION public.handle_insert_on_event_division()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION handle_insert_on_event_division()
+    RETURNS trigger
+	AS $function$
 DECLARE
-  v_num_rounds ss_event_divisions.num_rounds%TYPE := NEW.num_rounds;
-  v_count INT;
-  v_round_name TEXT;
-  v_round_list TEXT[];
+	v_num_rounds ss_event_divisions.num_rounds%TYPE := NEW.num_rounds;
+	v_count INT;
+	v_round_name TEXT;
+	v_round_list TEXT[];
 BEGIN
     IF EXISTS (SELECT 1 FROM ss_round_details WHERE event_id = NEW.event_id AND division_id = NEW.division_id) THEN
         RAISE NOTICE 'Rounds for event_id=%, division_id=% already exist. Skipping creation.', NEW.event_id, NEW.division_id;
@@ -23,78 +22,79 @@ BEGIN
     END;
 
     IF array_length(v_round_list, 1) > 0 THEN
-      v_count := 1;
-      WHILE (v_count <= v_num_rounds) LOOP
-        v_round_name := v_round_list[v_count];
+        v_count := 1;
+        WHILE (v_count <= v_num_rounds) LOOP
+			v_round_name := v_round_list[v_count];
 
-        INSERT INTO ss_round_details (event_id, division_id, round_num, round_name, num_heats)
-          VALUES (NEW.event_id, NEW.division_id, v_count, v_round_name, 1); -- Default to 1 heat
+			INSERT INTO ss_round_details (event_id, division_id, round_num, round_name, num_heats)
+				VALUES (NEW.event_id, NEW.division_id, v_count, v_round_name, 1); -- Default to 1 heat
 
-        v_count := v_count + 1;
-      END LOOP;
+			v_count := v_count + 1;
+        END LOOP;
     END IF;
 
-  RETURN NEW;
+    RETURN NEW;
 END;
-$function$;
+$function$ LANGUAGE plpgsql;
 
 
 -- 2.
 CREATE OR REPLACE FUNCTION handle_update_on_event_division()
-  RETURNS trigger AS $function$
+    RETURNS trigger 
+	AS $function$
 BEGIN
     IF NEW.num_rounds IS DISTINCT FROM OLD.num_rounds THEN
-      DELETE FROM ss_round_details
-      WHERE event_id = NEW.event_id AND division_id = NEW.division_id;
+		DELETE FROM ss_round_details
+		WHERE event_id = NEW.event_id AND division_id = NEW.division_id;
 
-      DECLARE
-        v_event_id ss_round_details.event_id%TYPE;
-        v_division_id ss_round_details.division_id%TYPE;
-        v_num_rounds ss_event_divisions.num_rounds%TYPE;
-        v_count INT; 
-        v_round_name TEXT; 
+		DECLARE
+			v_event_id ss_round_details.event_id%TYPE;
+			v_division_id ss_round_details.division_id%TYPE;
+			v_num_rounds ss_event_divisions.num_rounds%TYPE;
+			v_count INT; 
+			v_round_name TEXT; 
 
-        v_round_list_2 TEXT[] := ARRAY['Qualifications', 'Finals']; 
-        v_round_list_3 TEXT[] := ARRAY['Qualifications', 'Semi-Finals', 'Finals'];
-        v_round_list_4 TEXT[] := ARRAY['Qualifications', 'Quarter-Finals', 'Semi-Finals', 'Finals'];
+			v_round_list_2 TEXT[] := ARRAY['Qualifications', 'Finals']; 
+			v_round_list_3 TEXT[] := ARRAY['Qualifications', 'Semi-Finals', 'Finals'];
+			v_round_list_4 TEXT[] := ARRAY['Qualifications', 'Quarter-Finals', 'Semi-Finals', 'Finals'];
 
-      BEGIN
-        v_event_id := NEW.event_id;
-        v_division_id := NEW.division_id;
-        v_num_rounds := NEW.num_rounds;
+		BEGIN
+			v_event_id := NEW.event_id;
+			v_division_id := NEW.division_id;
+			v_num_rounds := NEW.num_rounds;
 
-        IF (v_num_rounds = 1) THEN
-          INSERT INTO ss_round_details (event_id, division_id, round_name, num_heats) 
-            VALUES (v_event_id, v_division_id, 'Finals', DEFAULT); 
+			IF (v_num_rounds = 1) THEN
+			INSERT INTO ss_round_details (event_id, division_id, round_name, num_heats) 
+				VALUES (v_event_id, v_division_id, 'Finals', DEFAULT); 
 
-        ELSEIF (v_num_rounds = 2) THEN
-          v_count := 1;
-          WHILE (v_count <= v_num_rounds) LOOP
-            v_round_name := v_round_list_2[v_count];
-            INSERT INTO ss_round_details (event_id, division_id, round_name, num_heats) 
-              VALUES (v_event_id, v_division_id, v_round_name, DEFAULT);
-            v_count := v_count + 1;
-          END LOOP; 
+			ELSEIF (v_num_rounds = 2) THEN
+			v_count := 1;
+			WHILE (v_count <= v_num_rounds) LOOP
+				v_round_name := v_round_list_2[v_count];
+				INSERT INTO ss_round_details (event_id, division_id, round_name, num_heats) 
+				VALUES (v_event_id, v_division_id, v_round_name, DEFAULT);
+				v_count := v_count + 1;
+			END LOOP; 
 
-        ELSEIF (v_num_rounds = 3) THEN
-          v_count := 1;
-          WHILE (v_count <= v_num_rounds) LOOP
-            v_round_name := v_round_list_3[v_count];
-            INSERT INTO ss_round_details (event_id, division_id, round_name, num_heats) 
-              VALUES (v_event_id, v_division_id, v_round_name, DEFAULT);
-            v_count := v_count + 1;
-          END LOOP; 
+			ELSEIF (v_num_rounds = 3) THEN
+			v_count := 1;
+			WHILE (v_count <= v_num_rounds) LOOP
+				v_round_name := v_round_list_3[v_count];
+				INSERT INTO ss_round_details (event_id, division_id, round_name, num_heats) 
+				VALUES (v_event_id, v_division_id, v_round_name, DEFAULT);
+				v_count := v_count + 1;
+			END LOOP; 
 
-        ELSEIF (v_num_rounds = 4) THEN
-          v_count := 1;
-          WHILE (v_count <= v_num_rounds) LOOP
-            v_round_name := v_round_list_4[v_count];
-            INSERT INTO ss_round_details (event_id, division_id, round_name, num_heats) 
-              VALUES (v_event_id, v_division_id, v_round_name, DEFAULT);
-            v_count := v_count + 1;
-          END LOOP; 
-        END IF;
-      END;
+			ELSEIF (v_num_rounds = 4) THEN
+			v_count := 1;
+			WHILE (v_count <= v_num_rounds) LOOP
+				v_round_name := v_round_list_4[v_count];
+				INSERT INTO ss_round_details (event_id, division_id, round_name, num_heats) 
+				VALUES (v_event_id, v_division_id, v_round_name, DEFAULT);
+				v_count := v_count + 1;
+			END LOOP; 
+			END IF;
+		END;
     END IF;
     RETURN NEW;
 END;
@@ -102,31 +102,30 @@ $function$ LANGUAGE plpgsql;
 
 
 -- 3.
-CREATE OR REPLACE FUNCTION public.handle_insert_on_round_details()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION handle_insert_on_round_details()
+	RETURNS trigger
+	AS $function$
 DECLARE
-  v_count INT;
+	v_count INT;
 BEGIN
-    IF NEW.num_heats IS NOT NULL AND NEW.num_heats > 0 THEN
-      v_count := 1;
-      WHILE (v_count <= NEW.num_heats) LOOP
-        INSERT INTO ss_heat_details (heat_num, num_runs, round_id)
-          VALUES (v_count, DEFAULT, NEW.round_id);
+	IF NEW.num_heats IS NOT NULL AND NEW.num_heats > 0 THEN
+	v_count := 1;
+	WHILE (v_count <= NEW.num_heats) LOOP
+		INSERT INTO ss_heat_details (heat_num, num_runs, round_id)
+		VALUES (v_count, DEFAULT, NEW.round_id);
 
-        v_count := v_count + 1;
-      END LOOP;
-    END IF;
+		v_count := v_count + 1;
+	END LOOP;
+	END IF;
 
-  RETURN NEW;
+	RETURN NEW;
 END;
-$function$;
+$function$ LANGUAGE plpgsql;
 
 
 -- 4.
 CREATE OR REPLACE FUNCTION handle_update_on_round_details()
-  RETURNS TRIGGER AS $trigger$
+    RETURNS TRIGGER AS $trigger$
 BEGIN
     IF NEW.num_heats IS DISTINCT FROM OLD.num_heats THEN
         DELETE FROM ss_heat_details
@@ -147,10 +146,9 @@ $trigger$ LANGUAGE plpgsql;
 
 
 -- 5.
-CREATE OR REPLACE FUNCTION public.handle_insert_on_heat_details()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION handle_insert_on_heat_details()
+    RETURNS trigger
+	AS $function$
 DECLARE
     v_event_id INT;
     v_division_id INT;
@@ -202,14 +200,15 @@ BEGIN
         CALL reseed_heat(v_round_heat_id);
     END IF;
 
-RETURN NULL;
+	RETURN NULL;
 END;
-$function$;
+$function$ LANGUAGE plpgsql;
 
 
 -- 6.
 CREATE OR REPLACE FUNCTION handle_update_on_heat_details()
-  RETURNS TRIGGER AS $trigger$
+    RETURNS TRIGGER 
+    AS $trigger$
 DECLARE
     v_old_event_id    INTEGER;
     v_old_division_id INTEGER;
@@ -272,10 +271,9 @@ $trigger$ LANGUAGE plpgsql;
 
 
 -- 7.
-CREATE OR REPLACE FUNCTION public.handle_insert_on_event_registrations()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
+CREATE OR REPLACE FUNCTION handle_insert_on_event_registrations()
+    RETURNS trigger
+	AS $function$
 DECLARE
     target_round_heat_id INT;
 BEGIN
@@ -285,8 +283,8 @@ BEGIN
         JOIN ss_heat_details hd ON hr.round_heat_id = hd.round_heat_id
         JOIN ss_round_details rd ON hd.round_id = rd.round_id
         WHERE hr.athlete_id = NEW.athlete_id
-          AND rd.event_id = NEW.event_id
-          AND rd.division_id = NEW.division_id
+            AND rd.event_id = NEW.event_id
+            AND rd.division_id = NEW.division_id
     ) THEN
         RAISE NOTICE 'Athlete ID % is already assigned to a heat for this event/division. No action taken.', NEW.athlete_id;
         RETURN NEW;
@@ -317,64 +315,13 @@ BEGIN
 
     RETURN NEW;
 END;
-$function$
-
--- CREATE OR REPLACE FUNCTION public.handle_insert_on_event_registrations()
---  RETURNS trigger
---  LANGUAGE plpgsql
--- AS $function$
--- DECLARE
---     target_round_heat_id INT;
--- BEGIN
---     IF EXISTS (
---         SELECT 1
---         FROM ss_heat_results hr
---         JOIN ss_heat_details hd ON hr.round_heat_id = hd.round_heat_id
---         JOIN ss_round_details rd ON hd.round_id = rd.round_id
---         WHERE hr.athlete_id = NEW.athlete_id
---           AND rd.event_id = NEW.event_id
---           AND rd.division_id = NEW.division_id
---     ) THEN
---         RAISE NOTICE 'Athlete ID % is already assigned to a heat for this event/division. No action taken.', NEW.athlete_id;
---         RETURN NEW;
---     END IF;
-
---     SELECT
---         hd.round_heat_id INTO target_round_heat_id
---     FROM
---         ss_round_details AS rd
---     JOIN
---         ss_heat_details AS hd ON rd.round_id = hd.round_id
---     LEFT JOIN
---         ss_heat_results AS hr ON hd.round_heat_id = hr.round_heat_id
---     WHERE
---         rd.event_id = NEW.event_id
---         AND rd.division_id = NEW.division_id
---     GROUP BY
---         hd.round_heat_id
---     ORDER BY
---         COUNT(hr.athlete_id) ASC, 
---         hd.round_heat_id ASC 
---     LIMIT 1;
-
---     IF target_round_heat_id IS NULL THEN
---         RAISE EXCEPTION 'Registration failed: No heats are defined for event_id=%, division_id=%.', NEW.event_id, NEW.division_id
---         USING HINT = 'Please ensure that at least one round and one heat have been created for this event and division before registering athletes.';
---     END IF;
-
---     INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id, seeding)
---     VALUES (target_round_heat_id, NEW.event_id, NEW.division_id, NEW.athlete_id, 0);
-
---     CALL reseed_heat(target_round_heat_id);
-
---     RETURN NEW;
--- END;
--- $function$;
+$function$ LANGUAGE plpgsql;
 
 
 -- 8.
 CREATE OR REPLACE FUNCTION handle_update_on_event_registrations()
-  RETURNS TRIGGER AS $function$
+    RETURNS TRIGGER 
+	AS $function$
 BEGIN
     IF NEW.event_id IS DISTINCT FROM OLD.event_id OR NEW.division_id IS DISTINCT FROM OLD.division_id THEN
         DELETE FROM ss_heat_results AS shr
@@ -382,9 +329,9 @@ BEGIN
             ss_heat_details AS hd
             INNER JOIN ss_round_details AS rd ON hd.round_id = rd.round_id
         WHERE rd.event_id = OLD.event_id
-          AND rd.division_id = OLD.division_id
-          AND shr.round_heat_id = hd.round_heat_id
-          AND shr.athlete_id = OLD.athlete_id;
+            AND rd.division_id = OLD.division_id
+            AND shr.round_heat_id = hd.round_heat_id
+            AND shr.athlete_id = OLD.athlete_id;
 
         INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id, seeding)
         SELECT
@@ -397,7 +344,7 @@ BEGIN
         INNER JOIN ss_heat_details AS hd
             ON rd.round_id = hd.round_id
         WHERE rd.event_id = NEW.event_id
-          AND rd.division_id = NEW.division_id
+            AND rd.division_id = NEW.division_id
         ON CONFLICT (round_heat_id, athlete_id) DO NOTHING;
 
         IF NOT FOUND THEN
@@ -413,7 +360,7 @@ $function$ LANGUAGE plpgsql;
 
 -- 9.
 CREATE OR REPLACE FUNCTION reseed_affected_heats()
-  RETURNS TRIGGER AS $function$
+    RETURNS TRIGGER AS $function$
 DECLARE
     v_round_heat_id INTEGER;
 BEGIN
@@ -432,7 +379,7 @@ $function$ LANGUAGE plpgsql;
 
 -- 10.
 CREATE OR REPLACE FUNCTION reseed_after_update()
-  RETURNS TRIGGER AS $trigger$
+    RETURNS TRIGGER AS $trigger$
 DECLARE
     v_round_heat_id INTEGER;
 BEGIN
@@ -457,7 +404,8 @@ $trigger$ LANGUAGE plpgsql;
 
 -- 11.
 CREATE OR REPLACE FUNCTION handle_insert_on_heat_results()
-RETURNS TRIGGER AS $$
+	RETURNS TRIGGER 
+	AS $function$
 DECLARE
     v_num_runs ss_heat_details.num_runs%TYPE;
     i INT; 
@@ -480,16 +428,16 @@ BEGIN
 
     RETURN NULL;
 END;
-$$ LANGUAGE plpgsql;
+$function$ LANGUAGE plpgsql;
 
 
 -- 12.
 CREATE OR REPLACE FUNCTION handle_update_on_heat_results()
-  RETURNS TRIGGER AS $function$
+    RETURNS TRIGGER AS $function$
 BEGIN
     IF NEW.event_id IS DISTINCT FROM OLD.event_id OR
-       NEW.division_id IS DISTINCT FROM OLD.division_id OR
-       NEW.athlete_id IS DISTINCT FROM OLD.athlete_id
+        NEW.division_id IS DISTINCT FROM OLD.division_id OR
+        NEW.athlete_id IS DISTINCT FROM OLD.athlete_id
     THEN
         UPDATE ss_run_results
         SET
@@ -510,7 +458,7 @@ $function$ LANGUAGE plpgsql;
 
 -- 13.
 CREATE OR REPLACE FUNCTION handle_insert_on_event_judges()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $function$
 BEGIN
     INSERT INTO ss_run_scores (personnel_id, run_result_id)
     SELECT
@@ -525,12 +473,12 @@ BEGIN
 
     RETURN NULL;
 END;
-$$ LANGUAGE plpgsql;
+$function$ LANGUAGE plpgsql;
 
 
 -- 14.
 CREATE OR REPLACE FUNCTION prevent_invalid_judge_update()
- RETURNS TRIGGER AS $function$
+    RETURNS TRIGGER AS $function$
 BEGIN
     IF NEW.personnel_id IS DISTINCT FROM OLD.personnel_id OR NEW.event_id IS DISTINCT FROM OLD.event_id THEN
         IF EXISTS (
@@ -538,8 +486,8 @@ BEGIN
             FROM ss_run_scores AS s
             JOIN ss_run_results AS r ON s.run_result_id = r.run_result_id
             WHERE s.personnel_id = OLD.personnel_id
-              AND r.event_id = OLD.event_id
-              AND s.score IS NOT NULL
+                AND r.event_id = OLD.event_id
+                AND s.score IS NOT NULL
         ) THEN
             RAISE EXCEPTION 'Update failed. Judge (ID: %) cannot be removed from event (ID: %) because they have already submitted scores.',
                 OLD.personnel_id, OLD.event_id;
@@ -553,7 +501,8 @@ $function$ LANGUAGE plpgsql;
 
 -- 15.
 CREATE OR REPLACE FUNCTION manage_judge_deletion_with_cleanup()
-  RETURNS TRIGGER AS $function$
+    RETURNS TRIGGER 
+	AS $function$
 DECLARE
     v_has_scored_rows         BOOLEAN := FALSE;
     v_deleted_null_scores_count INT;
@@ -563,17 +512,17 @@ BEGIN
         FROM ss_run_scores AS s
         JOIN ss_run_results AS r ON s.run_result_id = r.run_result_id
         WHERE s.personnel_id = OLD.personnel_id
-          AND r.event_id = OLD.event_id
-          AND s.score IS NOT NULL
+            AND r.event_id = OLD.event_id
+            AND s.score IS NOT NULL
     ) INTO v_has_scored_rows;
 
     WITH deleted_rows AS (
         DELETE FROM ss_run_scores AS s
         USING ss_run_results AS r
         WHERE s.run_result_id = r.run_result_id
-          AND s.personnel_id = OLD.personnel_id
-          AND r.event_id = OLD.event_id
-          AND s.score IS NULL
+            AND s.personnel_id = OLD.personnel_id
+            AND r.event_id = OLD.event_id
+            AND s.score IS NULL
         RETURNING 1
     )
     SELECT count(*)
@@ -596,7 +545,8 @@ $function$ LANGUAGE plpgsql;
 
 -- 16.
 CREATE OR REPLACE FUNCTION set_judge_passcode_if_null()
-  RETURNS TRIGGER AS $function$
+    RETURNS TRIGGER 
+	AS $function$
 BEGIN
     IF NEW.passcode IS NULL THEN
         NEW.passcode := generate_random_4_digit_code();
@@ -609,7 +559,8 @@ $function$ LANGUAGE plpgsql;
 
 -- 17.
 CREATE OR REPLACE FUNCTION generate_random_4_digit_code()
-  RETURNS TEXT AS $function$
+    RETURNS TEXT 
+	AS $function$
 DECLARE
     v_random_code TEXT;
     v_is_unique   BOOLEAN := FALSE;
@@ -631,7 +582,8 @@ $function$ LANGUAGE plpgsql VOLATILE;
 
 -- 18.
 CREATE OR REPLACE FUNCTION handle_insert_on_run_results()
-RETURNS TRIGGER AS $$
+	RETURNS TRIGGER 
+	AS $function$
 BEGIN
     INSERT INTO ss_run_scores (personnel_id, run_result_id)
     SELECT
@@ -646,12 +598,13 @@ BEGIN
 
     RETURN NULL;
 END;
-$$ LANGUAGE plpgsql;
+$function$ LANGUAGE plpgsql;
 
 
 -- 19.
 CREATE OR REPLACE FUNCTION handle_update_on_run_results()
-  RETURNS TRIGGER AS $trigger$
+    RETURNS TRIGGER 
+	AS $trigger$
 DECLARE
     v_old_event_id INTEGER;
     v_new_event_id INTEGER;
@@ -682,7 +635,25 @@ END;
 $trigger$ LANGUAGE plpgsql;
 
 
+-- 20.
+CREATE OR REPLACE FUNCTION trg_start_score_calculation_chain()
+    RETURNS TRIGGER
+    LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_run_result_id INTEGER;
+BEGIN
+    IF (TG_OP = 'INSERT' OR TG_OP = 'UPDATE') THEN
+        v_run_result_id := NEW.run_result_id;
+    ELSE
+        v_run_result_id := OLD.run_result_id;
+    END IF;
 
+    CALL calculate_average_score(v_run_result_id);
+
+    RETURN NULL;
+END;
+$function$;
 
 
 
