@@ -1,35 +1,19 @@
--- 1. ss_roles
--- 2. ss_users
--- 3. ss_disciplines
--- 4. ss_division
--- 5. ss_athletes
--- 6. ss_events (depends on ss_disciplines)
--- 7. ss_event_divisions (depends on ss_events, ss_division)
--- 8. ss_round_details (depends on ss_event_divisions)
--- 9. ss_heat_details (depends on ss_round_details)
--- 10. ss_event_registrations (depends on ss_event_divisions, ss_athletes)
--- 11. ss_heat_results (depends on ss_event_registrations, ss_heat_details)
--- 12. ss_run_results (depends on ss_heat_results)
--- 13. ss_event_judges (depends on ss_events)
--- 14. ss_run_scores (depends on ss_run_results)
--- 15. ss_event_personnel (depends on ss_events, ss_users)
-
-DROP TABLE ss_roles CASCADE;
-DROP TABLE ss_users CASCADE;
-DROP TABLE ss_disciplines CASCADE;
-DROP TABLE ss_division CASCADE;
-DROP TABLE ss_athletes CASCADE;
-DROP TABLE ss_events CASCADE;
-DROP TABLE ss_event_divisions CASCADE;
-DROP TABLE ss_round_details CASCADE;
-DROP TABLE ss_heat_details CASCADE;
-DROP TABLE ss_event_registrations CASCADE;
-DROP TABLE ss_heat_results CASCADE;
-DROP TABLE ss_run_results CASCADE;
-DROP TABLE ss_event_judges CASCADE;
-DROP TABLE ss_run_scores CASCADE;
-DROP TABLE ss_event_personnel CASCADE;
-
+DROP TABLE IF EXISTS ss_run_scores CASCADE;
+DROP TABLE IF EXISTS ss_heat_judges CASCADE;
+DROP TABLE IF EXISTS ss_event_judges CASCADE;
+DROP TABLE IF EXISTS ss_run_results CASCADE;
+DROP TABLE IF EXISTS ss_heat_results CASCADE;
+DROP TABLE IF EXISTS ss_event_registrations CASCADE;
+DROP TABLE IF EXISTS ss_heat_details CASCADE;
+DROP TABLE IF EXISTS ss_round_details CASCADE;
+DROP TABLE IF EXISTS ss_event_divisions CASCADE;
+DROP TABLE IF EXISTS ss_event_personnel CASCADE;
+DROP TABLE IF EXISTS ss_users CASCADE;
+DROP TABLE IF EXISTS ss_roles CASCADE;
+DROP TABLE IF EXISTS ss_events CASCADE;
+DROP TABLE IF EXISTS ss_disciplines CASCADE;
+DROP TABLE IF EXISTS ss_division CASCADE;
+DROP TABLE IF EXISTS ss_athletes CASCADE;
 
 -- 1. Roles Table
 CREATE TABLE ss_roles (
@@ -167,7 +151,7 @@ CREATE TABLE ss_run_results (
         REFERENCES ss_heat_results(round_heat_id, event_id, division_id, athlete_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
--- 13. Event Judges
+-- 13. Event Judges 
 CREATE TABLE ss_event_judges (
     personnel_id SERIAL PRIMARY KEY,
     event_id integer NOT NULL,
@@ -178,7 +162,16 @@ CREATE TABLE ss_event_judges (
     FOREIGN KEY (event_id) REFERENCES ss_events(event_id) ON DELETE CASCADE ON UPDATE CASCADE 
 );
 
--- 14. Run Scores
+-- 14. Heat Judges 
+CREATE TABLE ss_heat_judges (
+    round_heat_id integer NOT NULL,
+    personnel_id integer NOT NULL,
+    PRIMARY KEY (round_heat_id, personnel_id),
+    FOREIGN KEY (round_heat_id) REFERENCES ss_heat_details(round_heat_id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (personnel_id) REFERENCES ss_event_judges(personnel_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- 15. Run Scores 
 CREATE TABLE ss_run_scores (
     personnel_id integer NOT NULL,
     run_result_id integer NOT NULL,
@@ -188,7 +181,7 @@ CREATE TABLE ss_run_scores (
     FOREIGN KEY (run_result_id) REFERENCES ss_run_results(run_result_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
--- 15. Event Personnel
+-- 16. Event Personnel
 CREATE TABLE ss_event_personnel (
     event_id integer NOT NULL,
     user_id integer NOT NULL,
@@ -197,11 +190,3 @@ CREATE TABLE ss_event_personnel (
     FOREIGN KEY (user_id) REFERENCES ss_users(user_id) ON DELETE RESTRICT ON UPDATE CASCADE,
     FOREIGN KEY (event_id) REFERENCES ss_events(event_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-
-
-
-
-
-
-
-

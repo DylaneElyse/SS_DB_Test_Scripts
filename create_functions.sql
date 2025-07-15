@@ -500,50 +500,6 @@ $function$ LANGUAGE plpgsql;
 
 
 -- 15.
-CREATE OR REPLACE FUNCTION manage_judge_deletion_with_cleanup()
-    RETURNS TRIGGER 
-	AS $function$
-DECLARE
-    v_has_scored_rows         BOOLEAN := FALSE;
-    v_deleted_null_scores_count INT;
-BEGIN
-    SELECT EXISTS (
-        SELECT 1
-        FROM ss_run_scores AS s
-        JOIN ss_run_results AS r ON s.run_result_id = r.run_result_id
-        WHERE s.personnel_id = OLD.personnel_id
-            AND r.event_id = OLD.event_id
-            AND s.score IS NOT NULL
-    ) INTO v_has_scored_rows;
-
-    WITH deleted_rows AS (
-        DELETE FROM ss_run_scores AS s
-        USING ss_run_results AS r
-        WHERE s.run_result_id = r.run_result_id
-            AND s.personnel_id = OLD.personnel_id
-            AND r.event_id = OLD.event_id
-            AND s.score IS NULL
-        RETURNING 1
-    )
-    SELECT count(*)
-    INTO v_deleted_null_scores_count
-    FROM deleted_rows;
-
-    RAISE NOTICE 'Cleanup phase: Deleted % placeholder score row(s) for Judge (ID: %).',
-        v_deleted_null_scores_count, OLD.personnel_id;
-
-    IF v_has_scored_rows THEN
-        RAISE EXCEPTION 'Cannot remove Judge (ID: %): They have submitted scores. % placeholder scores were cleaned up, but the judge was NOT removed from the event.',
-            OLD.personnel_id, v_deleted_null_scores_count;
-    ELSE
-        RAISE NOTICE 'No submitted scores found for Judge (ID: %). Proceeding with deletion from event.', OLD.personnel_id;
-        RETURN OLD;
-    END IF;
-END;
-$function$ LANGUAGE plpgsql;
-
-
--- 16.
 CREATE OR REPLACE FUNCTION set_judge_passcode_if_null()
     RETURNS TRIGGER 
 	AS $function$
@@ -557,7 +513,7 @@ END;
 $function$ LANGUAGE plpgsql;
 
 
--- 17.
+-- 16.
 CREATE OR REPLACE FUNCTION generate_random_4_digit_code()
     RETURNS TEXT 
 	AS $function$
@@ -580,7 +536,7 @@ END;
 $function$ LANGUAGE plpgsql VOLATILE;
 
 
--- 18.
+-- 17.
 CREATE OR REPLACE FUNCTION handle_insert_on_run_results()
 	RETURNS TRIGGER 
 	AS $function$
@@ -601,7 +557,7 @@ END;
 $function$ LANGUAGE plpgsql;
 
 
--- 19.
+-- 18.
 CREATE OR REPLACE FUNCTION handle_update_on_run_results()
     RETURNS TRIGGER 
 	AS $trigger$
@@ -635,7 +591,7 @@ END;
 $trigger$ LANGUAGE plpgsql;
 
 
--- 20.
+-- 19.
 CREATE OR REPLACE FUNCTION trg_start_score_calculation_chain()
     RETURNS TRIGGER
     LANGUAGE plpgsql
@@ -654,7 +610,6 @@ BEGIN
     RETURN NULL;
 END;
 $function$;
-
 
 
 
