@@ -8,14 +8,12 @@ BEGIN
     DELETE FROM ss_run_results;
     DELETE FROM ss_heat_judges;
     DELETE FROM ss_heat_results;
-    DELETE FROM ss_event_registrations;
+    DELETE FROM ss_event_registrations; 
     DELETE FROM ss_heat_details;
     DELETE FROM ss_round_details;
     DELETE FROM ss_event_divisions;
     DELETE FROM ss_event_judges;
     DELETE FROM ss_events;
-    DELETE FROM ss_event_registrations;
-    DELETE FROM ss_event_judges;
     DELETE FROM ss_athletes;
     RAISE NOTICE 'Step 1: Complete.';
 END;
@@ -35,16 +33,16 @@ BEGIN
     ON CONFLICT (role_id) DO NOTHING;
 
     INSERT INTO ss_disciplines (discipline_id, category_name, subcategory_name, discipline_name) VALUES
-    ('FREE_BA_SBD', 'Freestyle', 'Big Air', 'Snowboard'), ('FREE_BA_SKI', 'Freestyle', 'Big Air', 'Ski'),
-    ('FREE_HP_SBD', 'Freestyle', 'Halfpipe', 'Snowboard'), ('FREE_HP_SKI', 'Freestyle', 'Halfpipe', 'Ski'),
-    ('FREE_SS_SBD', 'Freestyle', 'Slopestyle', 'Snowboard'), ('FREE_SS_SKI', 'Freestyle', 'Slopestyle', 'Ski'),
-    ('FREE_MOG_SKI', 'Freestyle', 'Moguls', 'Ski'), ('ALP_DH_SKI', 'Alpine', 'Downhill', 'Ski'),
-    ('ALP_SG_SKI', 'Alpine', 'Super-G', 'Ski'), ('ALP_GS_SKI', 'Alpine', 'Giant Slalom', 'Ski'),
-    ('ALP_SL_SKI', 'Alpine', 'Slalom', 'Ski'), ('ALP_SBX_SBD', 'Alpine', 'Snowboard Cross', 'Snowboard'),
-    ('ALP_SKX_SKI', 'Alpine', 'Ski Cross', 'Ski'), ('NORD_SP_SKI', 'Nordic', 'Sprint', 'Ski'),
-    ('NORD_DIST_SKI', 'Nordic', 'Distance', 'Ski'), ('NORD_CP_SKI', 'Nordic', 'Combined Pursuit', 'Ski'),
-    ('NORD_JUMP_SKI', 'Nordic', 'Ski Jumping', 'Ski'), ('SNOW_PS_SBD', 'Snowboard', 'Parallel Slalom', 'Snowboard'),
-    ('SNOW_PGS_SBD', 'Snowboard', 'Parallel Giant Slalom', 'Snowboard'), ('FREESKI_BX_SKI', 'Freeski', 'Big Air', 'Ski')
+    ('FREE_BA_SBD', 'Freestyle', 'Big Air', 'Snowboard'), ('FREE_HP_SBD', 'Freestyle', 'Halfpipe', 'Snowboard'),
+    ('FREE_SS_SBD', 'Freestyle', 'Slopestyle', 'Snowboard'), ('ALP_SBX_SBD', 'Alpine', 'Snowboard Cross', 'Snowboard'),
+    ('FREE_BA_SKI', 'Freestyle', 'Big Air', 'Ski'), ('FREE_HP_SKI', 'Freestyle', 'Halfpipe', 'Ski')
+    -- ('FREE_SS_SKI', 'Freestyle', 'Slopestyle', 'Ski'), ('ALP_SL_SKI', 'Alpine', 'Slalom', 'Ski'),
+    -- ('FREE_MOG_SKI', 'Freestyle', 'Moguls', 'Ski'), ('ALP_DH_SKI', 'Alpine', 'Downhill', 'Ski'),
+    -- ('ALP_SG_SKI', 'Alpine', 'Super-G', 'Ski'), ('ALP_GS_SKI', 'Alpine', 'Giant Slalom', 'Ski'),
+    -- ('ALP_SKX_SKI', 'Alpine', 'Ski Cross', 'Ski'), ('NORD_SP_SKI', 'Nordic', 'Sprint', 'Ski'),
+    -- ('NORD_DIST_SKI', 'Nordic', 'Distance', 'Ski'), ('NORD_CP_SKI', 'Nordic', 'Combined Pursuit', 'Ski'),
+    -- ('NORD_JUMP_SKI', 'Nordic', 'Ski Jumping', 'Ski'), ('SNOW_PS_SBD', 'Snowboard', 'Parallel Slalom', 'Snowboard'),
+    -- ('SNOW_PGS_SBD', 'Snowboard', 'Parallel Giant Slalom', 'Snowboard'), ('FREESKI_BX_SKI', 'Freeski', 'Big Air', 'Ski')
     ON CONFLICT (discipline_id) DO NOTHING;
 
     INSERT INTO ss_division(division_id, division_name) VALUES
@@ -277,15 +275,7 @@ AS $$
 BEGIN
     RAISE NOTICE 'Step 6: Populating mens big air qualification scores...';
 
-    CALL update_run_score(
-        300,
-        'Zachary'::VARCHAR,
-        'Bezushko'::VARCHAR,
-        'Qualifications'::VARCHAR,
-        1,
-        'Judge 1'::VARCHAR,
-        53::DECIMAL
-    );
+    CALL update_run_score(300, 'Zachary', 'Bezushko', 'Qualifications', 1, 'Judge 1', 53);
     CALL update_run_score(300, 'Zachary', 'Bezushko', 'Qualifications', 1, 'Judge 2', 61);
     CALL update_run_score(300, 'Zachary', 'Bezushko', 'Qualifications', 1, 'Judge 3', 58);
 
@@ -1484,13 +1474,19 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
     RAISE NOTICE 'Step 7: Synchronizing SERIAL sequences...';
-    SELECT setval('ss_athletes_athlete_id_seq', (SELECT max(athlete_id) FROM ss_athletes));
-    SELECT setval('ss_events_event_id_seq', (SELECT max(event_id) FROM ss_events));
-    -- etc. for other serial columns...
+    
+    PERFORM setval('ss_users_user_id_seq', (SELECT COALESCE(max(user_id), 1) FROM ss_users), true);
+    PERFORM setval('ss_division_division_id_seq', (SELECT COALESCE(max(division_id), 1) FROM ss_division), true);
+    PERFORM setval('ss_athletes_athlete_id_seq', (SELECT COALESCE(max(athlete_id), 1) FROM ss_athletes), true);
+    PERFORM setval('ss_events_event_id_seq', (SELECT COALESCE(max(event_id), 1) FROM ss_events), true);
+    PERFORM setval('ss_round_details_round_id_seq', (SELECT COALESCE(max(round_id), 1) FROM ss_round_details), true);
+    PERFORM setval('ss_heat_details_round_heat_id_seq', (SELECT COALESCE(max(round_heat_id), 1) FROM ss_heat_details), true);
+    PERFORM setval('ss_run_results_run_result_id_seq', (SELECT COALESCE(max(run_result_id), 1) FROM ss_run_results), true);
+    PERFORM setval('ss_event_judges_personnel_id_seq', (SELECT COALESCE(max(personnel_id), 1) FROM ss_event_judges), true);
+    
     RAISE NOTICE 'Step 7: Complete.';
 END;
 $$;
-
 
 
 CREATE OR REPLACE PROCEDURE run_full_database_seed()
