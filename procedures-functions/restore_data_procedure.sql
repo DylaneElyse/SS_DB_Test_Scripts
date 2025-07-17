@@ -18,6 +18,15 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
     RAISE NOTICE 'Step 1: Clearing transactional data...';
+    DELETE FROM ss_run_scores;
+    DELETE FROM ss_run_results;
+    DELETE FROM ss_heat_judges;
+    DELETE FROM ss_heat_results;
+    DELETE FROM ss_event_registrations;
+    DELETE FROM ss_heat_details;
+    DELETE FROM ss_round_details;
+    DELETE FROM ss_event_divisions;
+    DELETE FROM ss_event_judges;
     DELETE FROM ss_events;
     DELETE FROM ss_event_registrations;
     DELETE FROM ss_event_judges;
@@ -70,19 +79,49 @@ $$;
 -- Purpose: Populates the main data tables like users, athletes,
 -- events, and registrations.
 -- --------------------------------------------------------------------
-CREATE OR REPLACE PROCEDURE ss_seed_core_data()
+CREATE OR REPLACE PROCEDURE ss_seed_event_data()
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    RAISE NOTICE 'Step 3: Seeding core data (users, athletes, events, etc.)...';
+    RAISE NOTICE 'Step 3: Seeding event data (events, heats, etc.)...';
 
-    INSERT INTO ss_users(user_id, first_name, last_name, email, role_id, auth_provider_user_id) VALUES
-    (1, 'Ryan', 'Howie', 'ryan.howie@edu.sait.ca', 2, 'user_2vkK4uWkGElV6eB1G3vULdHHJJY'),
-    (2, 'Rodrigo', 'Rangel', 'rodrigo.alvesrangel@edu.sait.ca', 2, 'user_2wmwgrzZ0MXGgRsQwdkSCOwb7pV'),
-    (3, 'Chris', 'Findlay',	'christopher.findlay@edu.sait.ca', 2, 'user_2wmwpP5GO0oTcQbzR6pJzvI8HQf'),
-    (4,	'Hammad', 'Mahmood', 'hammad.mahmood@edu.sait.ca', 2, 'user_2wmwtt0HWdhWiAWvMIcl12h0ynJ'),
-    (5, 'Anthony', 'Azimi', 'anthony.azimi@sait.ca', 2, 'user_2xSyx0DjSJiWYJkLcTPLxzNNgwP')
-    ON CONFLICT DO NOTHING;
+    INSERT INTO ss_events (event_id, name, start_date, end_date, location, discipline_id, status) VALUES
+    (100, 'NACP - Air Nation Slopestyle', '2025-02-25', '2025-02-25', 'Winsport', 'FREE_SS_SBD', 'Scheduled'),
+    (200, 'NACP - Air Nation Halfpipe', '2025-02-23', '2025-02-23', 'Winsport', 'FREE_HP_SBD', 'Scheduled'),
+    (300, 'NACP - Air Nation Big Air', '2025-02-26', '2025-02-27', 'Winsport', 'FREE_BA_SBD', 'Scheduled');
+
+    INSERT INTO ss_event_divisions (event_id, division_id, num_rounds) VALUES
+    (100, 3, 2), (100, 4, 1), (200, 3, 1), (200, 4, 1), (300, 3, 2), (300, 4, 1);
+
+    INSERT INTO ss_event_judges(event_id, header) VALUES
+    (100, 'Judge 1'), (100, 'Judge 2'), (100, 'Judge 3'), (100, 'Judge 4'), (100, 'Judge 5'), (100, 'Judge 6'),
+    (200, 'Judge 1'), (200, 'Judge 2'), (200, 'Judge 3'), (200, 'Judge 4'), (200, 'Judge 5'),
+    (300, 'Judge 1'), (300, 'Judge 2'), (300, 'Judge 3'), (300, 'Judge 4'), (300, 'Judge 5');
+
+    UPDATE ss_round_details SET num_heats = 2 WHERE event_id = 100 AND division_id = 3 AND round_name = 'Qualifications';
+    UPDATE ss_round_details SET num_heats = 2 WHERE event_id = 300 AND division_id = 3 AND round_name = 'Qualifications';
+
+    UPDATE ss_heat_details SET num_runs = 2 WHERE round_id IN (SELECT round_id FROM ss_round_details WHERE event_id = 100 AND division_id = 3 AND round_name = 'Qualifications');
+    UPDATE ss_heat_details SET num_runs = 2 WHERE round_id IN (SELECT round_id FROM ss_round_details WHERE event_id = 100 AND division_id = 3 AND round_name = 'Finals');
+    UPDATE ss_heat_details SET num_runs = 2 WHERE round_id IN (SELECT round_id FROM ss_round_details WHERE event_id = 300 AND division_id = 3 AND round_name = 'Qualifications');
+    UPDATE ss_heat_details SET num_runs = 2 WHERE round_id IN (SELECT round_id FROM ss_round_details WHERE event_id = 200 AND division_id = 3 AND round_name = 'Finals');
+    UPDATE ss_heat_details SET num_runs = 2 WHERE round_id IN (SELECT round_id FROM ss_round_details WHERE event_id = 200 AND division_id = 4 AND round_name = 'Finals');
+
+    RAISE NOTICE 'Step 3: Complete.';
+END;
+$$;
+
+
+-- --------------------------------------------------------------------
+-- PROCEDURE 4: ss_adjust_heats_and_rounds
+-- Purpose: Applies necessary UPDATEs to configure rounds, heats,
+-- and athlete assignments after the initial data seed.
+-- --------------------------------------------------------------------
+CREATE OR REPLACE PROCEDURE ss_seed_athlete_data()
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RAISE NOTICE 'Step 4: Populate athletes and registrations';
 
     INSERT INTO ss_athletes (athlete_id, last_name, first_name, dob, nationality, stance, gender, fis_num, fis_hp_points, fis_ss_points, fis_ba_points) VALUES
     (1, 'Adams', 'Kaitlyn', '2005-09-16', 'USA', 'Regular', 'Female', 9535573, NULL, 111.70, 157.30),
@@ -183,25 +222,8 @@ BEGIN
     (96, 'Wrobel', 'Evan', '2005-12-30', 'USA', NULL, 'Male', 9531581, NULL, 56.45, 140.95),
     (97, 'Wynnyk', 'Solomon', '2008-05-24', 'CAN', 'Regular', 'Male', 9101372, 0.36, 1.75, 16.75),
     (98, 'Xiong', 'Shirui', '2007-12-12', 'CHN', 'Regular', 'Female', 9125149, NULL, 261.55, 192.70),
-    (99, 'Zhang', 'Xiaonan', '2006-03-15', 'CHN', 'Goofy', 'Female', 9125143, 418.10, NULL, 159.30)
-    ON CONFLICT(athlete_id) DO NOTHING;
-    
-    INSERT INTO ss_events (event_id, name, start_date, end_date, location, discipline_id, status) VALUES
-    (100, 'NACP - Air Nation Slopestyle', '2025-02-25', '2025-02-25', 'Winsport', 'FREE_SS_SBD', 'Scheduled'),
-    (200, 'NACP - Air Nation Halfpipe', '2025-02-23', '2025-02-23', 'Winsport', 'FREE_HP_SBD', 'Scheduled'),
-    (300, 'NACP - Air Nation Big Air', '2025-02-26', '2025-02-27', 'Winsport', 'FREE_BA_SBD', 'Scheduled')
-    ON CONFLICT(event_id) DO NOTHING;
+    (99, 'Zhang', 'Xiaonan', '2006-03-15', 'CHN', 'Goofy', 'Female', 9125143, 418.10, NULL, 159.30);
 
-    INSERT INTO ss_event_divisions (event_id, division_id, num_rounds) VALUES
-    (100, 3, 2), (100, 4, 1), (200, 3, 1), (200, 4, 1), (300, 3, 2), (300, 4, 1)
-    ON CONFLICT(event_id, division_id) DO NOTHING;
-    
-    INSERT INTO ss_event_judges(event_id, header) VALUES
-    (100, 'Judge 1'), (100, 'Judge 2'), (100, 'Judge 3'), (100, 'Judge 4'), (100, 'Judge 5'), (100, 'Judge 6'),
-    (200, 'Judge 1'), (200, 'Judge 2'), (200, 'Judge 3'), (200, 'Judge 4'), (200, 'Judge 5'),
-    (300, 'Judge 1'), (300, 'Judge 2'), (300, 'Judge 3'), (300, 'Judge 4'), (300, 'Judge 5')
-    ON CONFLICT(event_id, header) DO NOTHING;
-    
     INSERT INTO ss_event_registrations (event_id, division_id, athlete_id, bib_num) VALUES
     (200, 4, 26, 1), (200, 4, 91, 2), (200, 4, 43, 3), (200, 4, 44, 4), (200, 4, 39, 5), (200, 4, 93, 6),
     (200, 4, 58, 7), (200, 4, 30, 8), (200, 4, 19, 9), (200, 4, 65, 10), (200, 4, 74, 11), (200, 4, 60, 12),
@@ -228,33 +250,7 @@ BEGIN
     (300, 3, 62, 41), (300, 3, 49, 47), (300, 3, 37, 93), (300, 3, 90, 55), (300, 3, 56, 60), (300, 3, 55, 65),
     (300, 3, 67, 73), (300, 3, 64, 80), (300, 3, 16, 81), (300, 3, 27, 85), (300, 3, 48, 86), (300, 3, 7, 90),
     (300, 3, 79, 91), (300, 4, 25, 1), (300, 4, 99, 2), (300, 4, 66, 3), (300, 4, 98, 7), (300, 4, 50, 9),
-    (300, 4, 72, 11), (300, 4, 87, 12), (300, 4, 68, 5), (300, 4, 1, 14), (300, 4, 11, 15), (300, 4, 8, 17)
-    ON CONFLICT(event_id, division_id, athlete_id) DO NOTHING;
-    
-    RAISE NOTICE 'Step 3: Complete.';
-END;
-$$;
-
-
--- --------------------------------------------------------------------
--- PROCEDURE 4: ss_adjust_heats_and_rounds
--- Purpose: Applies necessary UPDATEs to configure rounds, heats,
--- and athlete assignments after the initial data seed.
--- --------------------------------------------------------------------
-CREATE OR REPLACE PROCEDURE ss_adjust_heats_and_rounds()
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    RAISE NOTICE 'Step 4: Adjusting competition setup (heats, rounds, etc.)...';
-
-    UPDATE ss_round_details SET num_heats = 2 WHERE event_id = 100 AND division_id = 3 AND round_name = 'Qualifications';
-    UPDATE ss_round_details SET num_heats = 2 WHERE event_id = 300 AND division_id = 3 AND round_name = 'Qualifications';
-    
-    UPDATE ss_heat_details SET num_runs = 2 WHERE round_id IN (SELECT round_id FROM ss_round_details WHERE event_id = 100 AND division_id = 3 AND round_name = 'Qualifications');
-    UPDATE ss_heat_details SET num_runs = 2 WHERE round_id IN (SELECT round_id FROM ss_round_details WHERE event_id = 100 AND division_id = 3 AND round_name = 'Finals');
-    UPDATE ss_heat_details SET num_runs = 2 WHERE round_id IN (SELECT round_id FROM ss_round_details WHERE event_id = 300 AND division_id = 3 AND round_name = 'Qualifications');
-    UPDATE ss_heat_details SET num_runs = 2 WHERE round_id IN (SELECT round_id FROM ss_round_details WHERE event_id = 200 AND division_id = 3 AND round_name = 'Finals');
-    UPDATE ss_heat_details SET num_runs = 2 WHERE round_id IN (SELECT round_id FROM ss_round_details WHERE event_id = 200 AND division_id = 4 AND round_name = 'Finals');
+    (300, 4, 72, 11), (300, 4, 87, 12), (300, 4, 68, 5), (300, 4, 1, 14), (300, 4, 11, 15), (300, 4, 8, 17);
 
     UPDATE ss_heat_results
     SET round_heat_id = target_heat.round_heat_id
@@ -362,11 +358,18 @@ BEGIN
 
     CALL ss_reset_data();
     CALL ss_seed_lookup_tables();
-    CALL ss_seed_core_data();
-    CALL ss_adjust_heats_and_rounds();
+    CALL ss_seed_event_data();
+    CALL ss_seed_athlete_data();
     CALL ss_reseed_heats();
-    CALL ss_populate_qualification_scores();
-    CALL ss_populate_finals_scores();
+    RAISE NOTICE 'Step 6: Poplulating scores....';
+    CALL update_m_ba_q_scores();
+    CALL update_w_ba_f_scores();
+    CALL update_m_ss_q_scores();
+    CALL update_w_ss_f_scores();
+    CALL update_m_hp_f_scores();
+    CALL update_w_hp_f_scores();
+    RAISE NOTICE 'Step 6: Complete.';
+
     
     RAISE NOTICE '--- Full Database Seed Process Finished Successfully ---';
 END;
@@ -377,6 +380,6 @@ $$;
 -- INSTRUCTION: To run the entire seeding process, execute the
 -- following command:
 --
--- CALL run_full_database_seed();
+CALL run_full_database_seed();
 --
 -- ====================================================================

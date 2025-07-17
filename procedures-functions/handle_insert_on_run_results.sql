@@ -1,5 +1,6 @@
 CREATE OR REPLACE FUNCTION handle_insert_on_run_results()
-RETURNS TRIGGER AS $$
+	RETURNS TRIGGER 
+	AS $function$
 BEGIN
     INSERT INTO ss_run_scores (personnel_id, run_result_id)
     SELECT
@@ -14,12 +15,11 @@ BEGIN
 
     RETURN NULL;
 END;
-$$ LANGUAGE plpgsql;
+$function$ LANGUAGE plpgsql;
 
 
-DROP TRIGGER IF EXISTS trg_create_scores_on_run_insert ON ss_run_results;
 
-CREATE TRIGGER trg_create_scores_on_run_insert
-AFTER INSERT ON ss_run_results
-FOR EACH ROW
-EXECUTE FUNCTION handle_insert_on_run_results();
+CREATE TRIGGER trg_handle_insert_on_run_results
+	AFTER INSERT ON ss_run_results
+	FOR EACH ROW
+	EXECUTE FUNCTION handle_insert_on_run_results();

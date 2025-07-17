@@ -1,6 +1,5 @@
 CREATE OR REPLACE PROCEDURE calculate_average_score(p_run_result_id INTEGER)
-LANGUAGE plpgsql
-AS $$
+	AS $procedure$
 BEGIN
     UPDATE ss_run_results
     SET
@@ -13,12 +12,11 @@ BEGIN
 
     CALL find_best_score(p_run_result_id);
 END;
-$$;
+$procedure$ LANGUAGE plpgsql;
 
 
 CREATE OR REPLACE PROCEDURE find_best_score(p_run_result_id INTEGER)
-LANGUAGE plpgsql
-AS $$
+	AS $procedure$
 DECLARE
     v_athlete_id INTEGER;
     v_round_heat_id INTEGER;
@@ -45,13 +43,13 @@ BEGIN
     WHERE
         athlete_id = v_athlete_id AND round_heat_id = v_round_heat_id;
 END;
-$$;
+$procedure$ LANGUAGE plpgsql;
 
 
 CREATE OR REPLACE FUNCTION trg_start_score_calculation_chain()
-  RETURNS TRIGGER
-  LANGUAGE plpgsql
-AS $$
+    RETURNS TRIGGER
+    LANGUAGE plpgsql
+AS $function$
 DECLARE
     v_run_result_id INTEGER;
 BEGIN
@@ -65,10 +63,10 @@ BEGIN
 
     RETURN NULL;
 END;
-$$;
+$function$;
 
 
-CREATE TRIGGER t_update_scores_after_change
+CREATE TRIGGER trg_update_scores_after_change
 AFTER INSERT OR UPDATE OR DELETE ON ss_run_scores
 FOR EACH ROW
 EXECUTE FUNCTION trg_start_score_calculation_chain();

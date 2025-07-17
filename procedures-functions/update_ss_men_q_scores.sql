@@ -53,12 +53,12 @@ BEGIN
     PERFORM update_run_score(100, 'Brock', 'Crouch', 'Qualifications', 1, 'Judge 2', 82);
     PERFORM update_run_score(100, 'Brock', 'Crouch', 'Qualifications', 1, 'Judge 3', 85);
 
-    PERFORM update_run_score(100, 'Keenan', 'Denchuk', 'Qualifications', 1, 'Judge 1', 14);
-    PERFORM update_run_score(100, 'Keenan', 'Denchuk', 'Qualifications', 1, 'Judge 2', 15);
-    PERFORM update_run_score(100, 'Keenan', 'Denchuk', 'Qualifications', 1, 'Judge 3', 12);
-    PERFORM update_run_score(100, 'Keenan', 'Denchuk', 'Qualifications', 2, 'Judge 1', 25);
-    PERFORM update_run_score(100, 'Keenan', 'Denchuk', 'Qualifications', 2, 'Judge 2', 23);
-    PERFORM update_run_score(100, 'Keenan', 'Denchuk', 'Qualifications', 2, 'Judge 3', 25);
+    PERFORM update_run_score(100, 'Keenan', 'Demchuk', 'Qualifications', 1, 'Judge 1', 14);
+    PERFORM update_run_score(100, 'Keenan', 'Demchuk', 'Qualifications', 1, 'Judge 2', 15);
+    PERFORM update_run_score(100, 'Keenan', 'Demchuk', 'Qualifications', 1, 'Judge 3', 12);
+    PERFORM update_run_score(100, 'Keenan', 'Demchuk', 'Qualifications', 2, 'Judge 1', 25);
+    PERFORM update_run_score(100, 'Keenan', 'Demchuk', 'Qualifications', 2, 'Judge 2', 23);
+    PERFORM update_run_score(100, 'Keenan', 'Demchuk', 'Qualifications', 2, 'Judge 3', 25);
 
     PERFORM update_run_score(100, 'Brooklyn', 'DePriest', 'Qualifications', 1, 'Judge 1', 70);
     PERFORM update_run_score(100, 'Brooklyn', 'DePriest', 'Qualifications', 1, 'Judge 2', 74);

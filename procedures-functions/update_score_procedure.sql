@@ -17,19 +17,21 @@ DECLARE
 BEGIN
     SELECT athlete_id INTO v_athlete_id
     FROM ss_athletes
-    WHERE first_name = p_athlete_first_name AND last_name = p_athlete_last_name;
+    WHERE lower(first_name) = lower(p_athlete_first_name)
+      AND lower(last_name) = lower(p_athlete_last_name);
 
     IF v_athlete_id IS NULL THEN
-        RAISE NOTICE 'Athlete not found: % %. Skipping update.', p_athlete_first_name, p_athlete_last_name;
+        RAISE NOTICE 'Athlete not found (case-insensitive search): % %. Skipping update.', p_athlete_first_name, p_athlete_last_name;
         RETURN;
     END IF;
 
     SELECT personnel_id INTO v_personnel_id
     FROM ss_event_judges
-    WHERE event_id = p_event_id AND header = p_judge_header;
+    WHERE event_id = p_event_id
+      AND lower(header) = lower(p_judge_header);
 
     IF v_personnel_id IS NULL THEN
-        RAISE NOTICE 'Judge not found for event %: %. Skipping update.', p_event_id, p_judge_header;
+        RAISE NOTICE 'Judge not found for event % with header (case-insensitive search): %. Skipping update.', p_event_id, p_judge_header;
         RETURN;
     END IF;
 
@@ -40,19 +42,17 @@ BEGIN
     WHERE T1.athlete_id = v_athlete_id
         AND T1.event_id = p_event_id
         AND T1.run_num = p_run_num
-        AND T3.round_name = p_round_name;
+        AND lower(T3.round_name) = lower(p_round_name);
 
     IF v_run_result_id IS NULL THEN
-        RAISE NOTICE 'Run result not found for Athlete ID %, Run %, Round %. Skipping update.', v_athlete_id, p_run_num, p_round_name;
+        RAISE NOTICE 'Run result not found for Athlete ID %, Run %, Round % (case-insensitive search). Skipping update.', v_athlete_id, p_run_num, p_round_name;
         RETURN;
     END IF;
 
-    UPDATE ss_run_scores
-    SET score = p_score
-    WHERE run_result_id = v_run_result_id
-        AND personnel_id = v_personnel_id;
-
-    RAISE NOTICE 'Updated score for Athlete: % %, Judge: %, Run: %, Score: %', p_athlete_first_name, p_athlete_last_name, p_judge_header, p_run_num, p_score;
+    INSERT INTO ss_run_scores (run_result_id, personnel_id, score)
+    VALUES (v_run_result_id, v_personnel_id, p_score)
+    ON CONFLICT (run_result_id, personnel_id) DO UPDATE
+    SET score = EXCLUDED.score;
 
 END;
 $$ LANGUAGE plpgsql;

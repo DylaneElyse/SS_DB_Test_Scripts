@@ -38,9 +38,9 @@ BEGIN
     PERFORM update_run_score(300, 'Brock', 'Crouch', 'Qualifications', 1, 'Judge 2', 83);
     PERFORM update_run_score(300, 'Brock', 'Crouch', 'Qualifications', 1, 'Judge 3', 84);
 
-    PERFORM update_run_score(300, 'Keenan', 'Denchuk', 'Qualifications', 1, 'Judge 1', 13);
-    PERFORM update_run_score(300, 'Keenan', 'Denchuk', 'Qualifications', 1, 'Judge 2', 17);
-    PERFORM update_run_score(300, 'Keenan', 'Denchuk', 'Qualifications', 1, 'Judge 3', 13);
+    PERFORM update_run_score(300, 'Keenan', 'Demchuk', 'Qualifications', 1, 'Judge 1', 13);
+    PERFORM update_run_score(300, 'Keenan', 'Demchuk', 'Qualifications', 1, 'Judge 2', 17);
+    PERFORM update_run_score(300, 'Keenan', 'Demchuk', 'Qualifications', 1, 'Judge 3', 13);
 
     PERFORM update_run_score(300, 'Brooklyn', 'DePriest', 'Qualifications', 1, 'Judge 1', 14);
     PERFORM update_run_score(300, 'Brooklyn', 'DePriest', 'Qualifications', 1, 'Judge 2', 20);

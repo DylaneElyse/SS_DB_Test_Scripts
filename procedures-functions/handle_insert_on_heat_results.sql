@@ -1,5 +1,6 @@
 CREATE OR REPLACE FUNCTION handle_insert_on_heat_results()
-RETURNS TRIGGER AS $$
+	RETURNS TRIGGER 
+	AS $function$
 DECLARE
     v_num_runs ss_heat_details.num_runs%TYPE;
     i INT; 
@@ -22,12 +23,12 @@ BEGIN
 
     RETURN NULL;
 END;
-$$ LANGUAGE plpgsql;
+$function$ LANGUAGE plpgsql;
 
 
 DROP TRIGGER IF EXISTS trg_create_run_results_on_heat_insert ON ss_heat_results;
 
-CREATE TRIGGER trg_create_run_results_on_heat_insert
-AFTER INSERT ON ss_heat_results
-FOR EACH ROW
-EXECUTE FUNCTION handle_insert_on_heat_results();
+CREATE TRIGGER trg_handle_insert_on_heat_results
+	AFTER INSERT ON ss_heat_results
+	FOR EACH ROW
+	EXECUTE FUNCTION handle_insert_on_heat_results();
