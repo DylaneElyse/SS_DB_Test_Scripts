@@ -146,6 +146,7 @@ CREATE TABLE ss_run_results (
     athlete_id integer NOT NULL,
     run_num integer NOT NULL,
     calc_score DECIMAL(10, 2),
+    UNIQUE (run_result_id, round_heat_id), 
     UNIQUE (round_heat_id, event_id, division_id, athlete_id, run_num),
     FOREIGN KEY (round_heat_id, event_id, division_id, athlete_id)
         REFERENCES ss_heat_results(round_heat_id, event_id, division_id, athlete_id) ON DELETE CASCADE ON UPDATE CASCADE
@@ -162,7 +163,7 @@ CREATE TABLE ss_event_judges (
     FOREIGN KEY (event_id) REFERENCES ss_events(event_id) ON DELETE CASCADE ON UPDATE CASCADE 
 );
 
--- 14. Heat Judges 
+-- 14. Heat Judges
 CREATE TABLE ss_heat_judges (
     round_heat_id integer NOT NULL,
     personnel_id integer NOT NULL,
@@ -171,14 +172,17 @@ CREATE TABLE ss_heat_judges (
     FOREIGN KEY (personnel_id) REFERENCES ss_event_judges(personnel_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
--- 15. Run Scores 
+-- 15. Run Scores
 CREATE TABLE ss_run_scores (
-    personnel_id integer NOT NULL,
     run_result_id integer NOT NULL,
+    personnel_id integer NOT NULL,
+    round_heat_id integer NOT NULL,
     score DECIMAL(10, 2),
-    PRIMARY KEY (personnel_id, run_result_id),
-    FOREIGN KEY (personnel_id) REFERENCES ss_event_judges(personnel_id) ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY (run_result_id) REFERENCES ss_run_results(run_result_id) ON DELETE CASCADE ON UPDATE CASCADE
+    PRIMARY KEY (run_result_id, personnel_id),
+    FOREIGN KEY (run_result_id, round_heat_id) 
+        REFERENCES ss_run_results(run_result_id, round_heat_id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (round_heat_id, personnel_id) 
+        REFERENCES ss_heat_judges(round_heat_id, personnel_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- 16. Event Personnel

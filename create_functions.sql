@@ -304,14 +304,28 @@ $function$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION handle_insert_on_event_judges()
 RETURNS TRIGGER AS $function$
 BEGIN
-    INSERT INTO ss_run_scores (personnel_id, run_result_id)
-    SELECT NEW.personnel_id, r.run_result_id
+    -- The INSERT now includes round_heat_id
+    INSERT INTO ss_run_scores (personnel_id, run_result_id, round_heat_id)
+    -- The SELECT now provides r.round_heat_id
+    SELECT NEW.personnel_id, r.run_result_id, r.round_heat_id
     FROM ss_run_results AS r
     WHERE r.event_id = NEW.event_id
     ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
     RETURN NULL;
 END;
 $function$ LANGUAGE plpgsql;
+
+-- CREATE OR REPLACE FUNCTION handle_insert_on_event_judges()
+-- RETURNS TRIGGER AS $function$
+-- BEGIN
+--     INSERT INTO ss_run_scores (personnel_id, run_result_id)
+--     SELECT NEW.personnel_id, r.run_result_id
+--     FROM ss_run_results AS r
+--     WHERE r.event_id = NEW.event_id
+--     ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
+--     RETURN NULL;
+-- END;
+-- $function$ LANGUAGE plpgsql;
 
 
 -- 11.
@@ -357,56 +371,89 @@ $function$ LANGUAGE plpgsql;
 
 
 -- 14.
-CREATE OR REPLACE FUNCTION manage_run_scores_from_run_result()
+CREATE OR REPLACE FUNCTION handle_run_results_creation()
     RETURNS TRIGGER AS $$
 DECLARE
     v_event_id INTEGER;
 BEGIN
+    -- This trigger should only fire on INSERT, or specific UPDATEs
     IF (TG_OP = 'INSERT') OR (TG_OP = 'UPDATE' AND NEW.round_heat_id IS DISTINCT FROM OLD.round_heat_id) THEN
+
         IF TG_OP = 'UPDATE' THEN
+            -- Clean up old scores if the run moves to a new heat
             DELETE FROM ss_run_scores WHERE run_result_id = OLD.run_result_id;
         END IF;
-        SELECT rd.event_id INTO v_event_id FROM ss_heat_details hd JOIN ss_round_details rd ON hd.round_id = rd.round_id WHERE hd.round_heat_id = NEW.round_heat_id;
+
+        -- We can get event_id directly from the new run result row
+        v_event_id := NEW.event_id;
+
         IF v_event_id IS NOT NULL THEN
-            INSERT INTO ss_run_scores (personnel_id, run_result_id)
-            SELECT j.personnel_id, NEW.run_result_id FROM ss_event_judges AS j WHERE j.event_id = v_event_id
+            -- The INSERT now includes round_heat_id
+            INSERT INTO ss_run_scores (personnel_id, run_result_id, round_heat_id)
+            -- The SELECT now provides the NEW.round_heat_id
+            SELECT 
+                hj.personnel_id, 
+                NEW.run_result_id,
+                NEW.round_heat_id
+            FROM ss_heat_judges AS hj
+            WHERE hj.round_heat_id = NEW.round_heat_id
             ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
         END IF;
     END IF;
+
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
+-- CREATE OR REPLACE FUNCTION manage_run_scores_from_run_result()
+--     RETURNS TRIGGER AS $$
+-- DECLARE
+--     v_event_id INTEGER;
+-- BEGIN
+--     IF (TG_OP = 'INSERT') OR (TG_OP = 'UPDATE' AND NEW.round_heat_id IS DISTINCT FROM OLD.round_heat_id) THEN
+--         IF TG_OP = 'UPDATE' THEN
+--             DELETE FROM ss_run_scores WHERE run_result_id = OLD.run_result_id;
+--         END IF;
+--         SELECT rd.event_id INTO v_event_id FROM ss_heat_details hd JOIN ss_round_details rd ON hd.round_id = rd.round_id WHERE hd.round_heat_id = NEW.round_heat_id;
+--         IF v_event_id IS NOT NULL THEN
+--             INSERT INTO ss_run_scores (personnel_id, run_result_id)
+--             SELECT j.personnel_id, NEW.run_result_id FROM ss_event_judges AS j WHERE j.event_id = v_event_id
+--             ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
+--         END IF;
+--     END IF;
+--     RETURN NULL;
+-- END;
+-- $$ LANGUAGE plpgsql;
 
 
 -- 15.
-CREATE OR REPLACE FUNCTION handle_run_results()
-    RETURNS TRIGGER AS $$
-DECLARE
-    v_event_id INTEGER;
-BEGIN
-    IF (TG_OP = 'INSERT') OR (TG_OP = 'UPDATE' AND NEW.round_heat_id IS DISTINCT FROM OLD.round_heat_id) THEN
+-- CREATE OR REPLACE FUNCTION handle_run_results()
+--     RETURNS TRIGGER AS $$
+-- DECLARE
+--     v_event_id INTEGER;
+-- BEGIN
+--     IF (TG_OP = 'INSERT') OR (TG_OP = 'UPDATE' AND NEW.round_heat_id IS DISTINCT FROM OLD.round_heat_id) THEN
 
-        IF TG_OP = 'UPDATE' THEN
-            DELETE FROM ss_run_scores WHERE run_result_id = OLD.run_result_id;
-        END IF;
+--         IF TG_OP = 'UPDATE' THEN
+--             DELETE FROM ss_run_scores WHERE run_result_id = OLD.run_result_id;
+--         END IF;
 
-        SELECT rd.event_id INTO v_event_id
-        FROM ss_heat_details hd
-        JOIN ss_round_details rd ON hd.round_id = rd.round_id
-        WHERE hd.round_heat_id = NEW.round_heat_id;
+--         SELECT rd.event_id INTO v_event_id
+--         FROM ss_heat_details hd
+--         JOIN ss_round_details rd ON hd.round_id = rd.round_id
+--         WHERE hd.round_heat_id = NEW.round_heat_id;
 
-        IF v_event_id IS NOT NULL THEN
-            INSERT INTO ss_run_scores (personnel_id, run_result_id)
-            SELECT j.personnel_id, NEW.run_result_id
-            FROM ss_event_judges AS j
-            WHERE j.event_id = v_event_id
-            ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
-        END IF;
-    END IF;
+--         IF v_event_id IS NOT NULL THEN
+--             INSERT INTO ss_run_scores (personnel_id, run_result_id)
+--             SELECT j.personnel_id, NEW.run_result_id
+--             FROM ss_event_judges AS j
+--             WHERE j.event_id = v_event_id
+--             ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
+--         END IF;
+--     END IF;
 
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
+--     RETURN NULL;
+-- END;
+-- $$ LANGUAGE plpgsql;
 
 
 -- 16.
