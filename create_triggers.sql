@@ -21,100 +21,114 @@ DROP TRIGGER IF EXISTS trg_manage_round_details ON ss_round_details;
 DROP TRIGGER IF EXISTS trg_manage_run_scores ON ss_run_results;
 
 
--- 1. On ss_event_divisions (Handles rounds)
+-- 1. Insert and update on ss_event_divisions
 CREATE TRIGGER trg_manage_event_divisions
     AFTER INSERT OR UPDATE ON ss_event_divisions
     FOR EACH ROW
     EXECUTE FUNCTION handle_event_divisions();
 
--- 2. On ss_round_details (Handles heats)
+-- 2. Insert and update on ss_round_details
 CREATE TRIGGER trg_manage_round_details
     AFTER INSERT OR UPDATE ON ss_round_details
     FOR EACH ROW
     EXECUTE FUNCTION handle_round_details();
 
--- 3. On ss_heat_details (Separate logic for INSERT vs UPDATE)
+-- 3. Insert on ss_heat_details
 CREATE TRIGGER trg_handle_insert_on_heat_details
 	AFTER INSERT ON ss_heat_details
 	FOR EACH ROW
 	EXECUTE FUNCTION handle_insert_on_heat_details();
 
+-- 4. Update on ss_heat_details
 CREATE TRIGGER trg_handle_update_on_heat_details
 	AFTER UPDATE ON ss_heat_details
 	FOR EACH ROW
 	EXECUTE FUNCTION handle_update_on_heat_details();
 
--- 4. On ss_event_registrations (The new, optimized setup)
+-- 5. Insert on ss_event_registrations
 CREATE TRIGGER trg_handle_insert_on_event_registrations
     AFTER INSERT ON ss_event_registrations
     FOR EACH ROW
     EXECUTE FUNCTION handle_insert_on_event_registrations();
 
--- 5. On ss_event_registrations (Handles athlete movement)
+-- 6. Update on ss_event_registrations
 CREATE TRIGGER trg_handle_update_on_event_registrations
     AFTER UPDATE ON ss_event_registrations
     FOR EACH ROW
     EXECUTE FUNCTION handle_update_on_event_registrations();
 
--- 5. On ss_event_registrations (Handles reseeding after updates)
+-- 7. Handles reseeding after insert on ss_event_registrations
 CREATE TRIGGER trg_reseeding_after_registration_insert
     AFTER INSERT ON ss_event_registrations
     REFERENCING NEW TABLE AS new_rows
     FOR EACH STATEMENT
     EXECUTE FUNCTION manage_registration_reseeding();
 
--- Trigger #2: For UPDATE operations
+-- 8. Handles reseeding after update on ss_event_registrations
 CREATE TRIGGER trg_reseeding_after_registration_update
     AFTER UPDATE ON ss_event_registrations
     REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows
     FOR EACH STATEMENT
     EXECUTE FUNCTION manage_registration_reseeding();
 
--- Trigger #3: For DELETE operations
+-- 9. Handles reseeding after delete on ss_event_registrations
 CREATE TRIGGER trg_reseeding_after_registration_delete
     AFTER DELETE ON ss_event_registrations
     REFERENCING OLD TABLE AS old_rows
     FOR EACH STATEMENT
     EXECUTE FUNCTION manage_registration_reseeding();
 
--- 6. On ss_heat_results (Handles run creation)
+-- 10. Insert on ss_heat_results
 CREATE TRIGGER trg_handle_insert_on_heat_results
 	AFTER INSERT ON ss_heat_results
 	FOR EACH ROW
 	EXECUTE FUNCTION handle_insert_on_heat_results();
 
--- 7. On ss_heat_results (Handles updates to run results)
+-- 11. Update on ss_heat_results
 CREATE TRIGGER trg_handle_update_on_heat_results
 	AFTER UPDATE ON ss_heat_results
 	FOR EACH ROW
 	EXECUTE FUNCTION handle_update_on_heat_results();
 
--- 8. On ss_event_judges (Handles judge setup)
-CREATE TRIGGER trg_handle_insert_on_event_judges
-	AFTER INSERT ON ss_event_judges
-	FOR EACH ROW
-	EXECUTE FUNCTION handle_insert_on_event_judges();
-
--- 9. On ss_event_judges (Prevents invalid updates)
+-- 12. Update on ss_event_judges
 CREATE TRIGGER trg_prevent_invalid_judge_update
 	BEFORE UPDATE ON ss_event_judges
 	FOR EACH ROW
 	EXECUTE FUNCTION prevent_invalid_judge_update();
 
--- 10. On ss_event_judges (Sets passcode if NULL)
+-- 13. Judge passcode handling
 CREATE TRIGGER trg_set_judge_passcode_if_null
 	BEFORE INSERT ON ss_event_judges
 	FOR EACH ROW
 	EXECUTE FUNCTION set_judge_passcode_if_null();
 
--- 11. On ss_run_results (Handles score placeholder creation)
+-- 14. Insert or update on ss_run_results
 CREATE TRIGGER trg_manage_run_scores
     AFTER INSERT OR UPDATE ON ss_run_results
     FOR EACH ROW
-    EXECUTE FUNCTION manage_run_scores_from_run_result();
+    EXECUTE FUNCTION handle_run_results_creation();
 
--- 12. On ss_run_scores (Starts the final calculation chain)
+-- 15. Insert or update on ss_run_scores
 CREATE TRIGGER trg_update_scores_after_change
 	AFTER INSERT OR UPDATE OR DELETE ON ss_run_scores
 	FOR EACH ROW
 	EXECUTE FUNCTION trg_start_score_calculation_chain();
+
+-- 16. Prevent event judge reassignment
+CREATE TRIGGER trg_prevent_event_judge_reassignment
+    BEFORE UPDATE ON ss_event_judges
+    FOR EACH ROW
+    WHEN (OLD.event_id IS DISTINCT FROM NEW.event_id)
+    EXECUTE FUNCTION prevent_event_judge_reassignment();
+
+-- 17. Prevent heat judge reassignment
+CREATE TRIGGER trg_prevent_heat_judge_reassignment
+    BEFORE UPDATE ON ss_heat_judges
+    FOR EACH ROW
+    EXECUTE FUNCTION prevent_heat_judge_reassignment();
+
+-- 18. After update on ss_heat_judges
+CREATE TRIGGER trg_handle_update_on_heat_judges
+    AFTER UPDATE ON ss_heat_judges
+    FOR EACH ROW
+    EXECUTE FUNCTION handle_update_on_heat_judges();

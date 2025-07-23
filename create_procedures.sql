@@ -167,16 +167,18 @@ CREATE OR REPLACE PROCEDURE update_run_score(
     p_judge_header VARCHAR,
     p_score DECIMAL
 )
-    AS $$
+LANGUAGE plpgsql
+AS $$
 DECLARE
     v_athlete_id INT;
     v_personnel_id INT;
     v_run_result_id INT;
+    v_round_heat_id INT;
 BEGIN
     SELECT athlete_id INTO v_athlete_id
     FROM ss_athletes
     WHERE lower(first_name) = lower(p_athlete_first_name)
-        AND lower(last_name) = lower(p_athlete_last_name);
+      AND lower(last_name) = lower(p_athlete_last_name);
 
     IF v_athlete_id IS NULL THEN
         RAISE NOTICE 'Athlete not found (case-insensitive search): % %. Skipping update.', p_athlete_first_name, p_athlete_last_name;
@@ -186,32 +188,128 @@ BEGIN
     SELECT personnel_id INTO v_personnel_id
     FROM ss_event_judges
     WHERE event_id = p_event_id
-        AND lower(header) = lower(p_judge_header);
+      AND lower(header) = lower(p_judge_header);
 
     IF v_personnel_id IS NULL THEN
         RAISE NOTICE 'Judge not found for event % with header (case-insensitive search): %. Skipping update.', p_event_id, p_judge_header;
         RETURN;
     END IF;
 
-    SELECT T1.run_result_id INTO v_run_result_id
+    SELECT T1.run_result_id, T1.round_heat_id 
+    INTO v_run_result_id, v_round_heat_id
     FROM ss_run_results AS T1
     JOIN ss_heat_details AS T2 ON T1.round_heat_id = T2.round_heat_id
     JOIN ss_round_details AS T3 ON T2.round_id = T3.round_id
     WHERE T1.athlete_id = v_athlete_id
-        AND T1.event_id = p_event_id
-        AND T1.run_num = p_run_num
-        AND lower(T3.round_name) = lower(p_round_name);
+      AND T1.event_id = p_event_id
+      AND T1.run_num = p_run_num
+      AND lower(T3.round_name) = lower(p_round_name);
 
     IF v_run_result_id IS NULL THEN
         RAISE NOTICE 'Run result not found for Athlete ID %, Run %, Round % (case-insensitive search). Skipping update.', v_athlete_id, p_run_num, p_round_name;
         RETURN;
     END IF;
 
-    INSERT INTO ss_run_scores (run_result_id, personnel_id, score)
-    VALUES (v_run_result_id, v_personnel_id, p_score)
+    INSERT INTO ss_run_scores (run_result_id, personnel_id, round_heat_id, score)
+    VALUES (v_run_result_id, v_personnel_id, v_round_heat_id, p_score)
     ON CONFLICT (run_result_id, personnel_id) DO UPDATE
     SET score = EXCLUDED.score;
 
 END;
-$$ LANGUAGE plpgsql;
+$$;
+
+
+-- 6.
+CREATE OR REPLACE PROCEDURE add_event_judge(
+    p_event_id INT,
+    p_header VARCHAR,
+    p_name VARCHAR DEFAULT NULL
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_personnel_id INT;
+BEGIN
+    INSERT INTO ss_event_judges (event_id, header, name)
+    VALUES (p_event_id, p_header, p_name)
+    RETURNING personnel_id INTO v_personnel_id;
+
+    RAISE NOTICE 'Created event judge with personnel_id: % for event_id: %', v_personnel_id, p_event_id;
+
+    INSERT INTO ss_heat_judges (round_heat_id, personnel_id)
+    SELECT hd.round_heat_id, v_personnel_id
+    FROM ss_heat_details AS hd
+    JOIN ss_round_details AS rd ON hd.round_id = rd.round_id
+    WHERE rd.event_id = p_event_id
+    ON CONFLICT (round_heat_id, personnel_id) DO NOTHING;
+
+    RAISE NOTICE 'Assigned judge % to all heats for event %.', v_personnel_id, p_event_id;
+
+    INSERT INTO ss_run_scores (personnel_id, run_result_id, round_heat_id)
+    SELECT v_personnel_id, r.run_result_id, r.round_heat_id
+    FROM ss_run_results AS r
+    WHERE r.event_id = p_event_id
+    ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
+
+    RAISE NOTICE 'Created placeholder run scores for judge % across event %.', v_personnel_id, p_event_id;
+
+END;
+$$;
+
+
+-- 7.
+CREATE OR REPLACE PROCEDURE add_heat_judge(
+    p_round_heat_id INT,
+    p_header VARCHAR,
+    p_name VARCHAR DEFAULT NULL
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_event_id INT;
+    v_personnel_id INT;
+BEGIN
+    SELECT rd.event_id
+    INTO v_event_id
+    FROM ss_heat_details AS hd
+    JOIN ss_round_details AS rd ON hd.round_id = rd.round_id
+    WHERE hd.round_heat_id = p_round_heat_id;
+
+    IF v_event_id IS NULL THEN
+        RAISE EXCEPTION 'Invalid round_heat_id provided: %', p_round_heat_id;
+    END IF;
+    
+    RAISE NOTICE 'Procedure called for heat_id: %, which belongs to event_id: %', p_round_heat_id, v_event_id;
+
+    SELECT personnel_id
+    INTO v_personnel_id
+    FROM ss_event_judges
+    WHERE event_id = v_event_id AND header = p_header;
+    
+    IF v_personnel_id IS NULL THEN
+        RAISE NOTICE 'Judge with header "%" not found for event %. Creating new judge.', p_header, v_event_id;
+        INSERT INTO ss_event_judges (event_id, header, name)
+        VALUES (v_event_id, p_header, p_name)
+        RETURNING personnel_id INTO v_personnel_id;
+        RAISE NOTICE 'Created new event judge with personnel_id: %', v_personnel_id;
+    ELSE
+        RAISE NOTICE 'Found existing judge with header "%". Re-using personnel_id: %', p_header, v_personnel_id;
+    END IF;
+
+    INSERT INTO ss_heat_judges (round_heat_id, personnel_id)
+    VALUES (p_round_heat_id, v_personnel_id)
+    ON CONFLICT (round_heat_id, personnel_id) DO NOTHING;
+
+    RAISE NOTICE 'Assigned judge % to specific heat %.', v_personnel_id, p_round_heat_id;
+    
+    INSERT INTO ss_run_scores (personnel_id, run_result_id, round_heat_id)
+    SELECT v_personnel_id, r.run_result_id, r.round_heat_id
+    FROM ss_run_results AS r
+    WHERE r.round_heat_id = p_round_heat_id
+    ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
+
+    RAISE NOTICE 'Created placeholder run scores for judge % for heat %.', v_personnel_id, p_round_heat_id;
+
+END;
+$$;
 

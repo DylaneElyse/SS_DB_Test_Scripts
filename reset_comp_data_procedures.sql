@@ -69,11 +69,6 @@ BEGIN
     INSERT INTO ss_event_divisions (event_id, division_id, num_rounds) VALUES
     (100, 3, 2), (100, 4, 1), (200, 3, 1), (200, 4, 1), (300, 3, 2), (300, 4, 1);
 
-    INSERT INTO ss_event_judges(event_id, header) VALUES
-    (100, 'Judge 1'), (100, 'Judge 2'), (100, 'Judge 3'), (100, 'Judge 4'), (100, 'Judge 5'), (100, 'Judge 6'),
-    (200, 'Judge 1'), (200, 'Judge 2'), (200, 'Judge 3'), (200, 'Judge 4'), (200, 'Judge 5'),
-    (300, 'Judge 1'), (300, 'Judge 2'), (300, 'Judge 3'), (300, 'Judge 4'), (300, 'Judge 5');
-
     UPDATE ss_round_details SET num_heats = 2 WHERE event_id = 100 AND division_id = 3 AND round_name = 'Qualifications';
     UPDATE ss_round_details SET num_heats = 2 WHERE event_id = 300 AND division_id = 3 AND round_name = 'Qualifications';
 
@@ -82,6 +77,23 @@ BEGIN
     UPDATE ss_heat_details SET num_runs = 2 WHERE round_id IN (SELECT round_id FROM ss_round_details WHERE event_id = 300 AND division_id = 3 AND round_name = 'Qualifications');
     UPDATE ss_heat_details SET num_runs = 2 WHERE round_id IN (SELECT round_id FROM ss_round_details WHERE event_id = 200 AND division_id = 3 AND round_name = 'Finals');
     UPDATE ss_heat_details SET num_runs = 2 WHERE round_id IN (SELECT round_id FROM ss_round_details WHERE event_id = 200 AND division_id = 4 AND round_name = 'Finals');
+
+    CALL add_event_judge(100, 'Judge 1');
+    CALL add_event_judge(100, 'Judge 2');
+    CALL add_event_judge(100, 'Judge 3');
+    CALL add_event_judge(100, 'Judge 4');
+    CALL add_event_judge(100, 'Judge 5');
+    CALL add_event_judge(100, 'Judge 6');
+    CALL add_event_judge(200, 'Judge 1');
+    CALL add_event_judge(200, 'Judge 2');
+    CALL add_event_judge(200, 'Judge 3');
+    CALL add_event_judge(200, 'Judge 4');
+    CALL add_event_judge(200, 'Judge 5');
+    CALL add_event_judge(300, 'Judge 1');
+    CALL add_event_judge(300, 'Judge 2');
+    CALL add_event_judge(300, 'Judge 3');
+    CALL add_event_judge(300, 'Judge 4');
+    CALL add_event_judge(300, 'Judge 5');
 
     RAISE NOTICE 'Step 3: Complete.';
 END;
@@ -1513,7 +1525,6 @@ BEGIN
     RAISE NOTICE '--- Full Database Seed Process Finished Successfully ---';
 END;
 $$;
-
 
 
 CALL run_full_database_seed();

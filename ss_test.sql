@@ -56,3 +56,37 @@ WHERE run_result_id = 1 AND personnel_id = 123;
 
 
 CALL calculate_average_score (1);
+
+
+
+
+
+CALL add_event_judge([event_id], [header], [name (optional, will default to NULL if not passed)]);
+CALL add_heat_judge([round_heat_id], [header], [name (optional, will default to NULL if not passed)]);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
