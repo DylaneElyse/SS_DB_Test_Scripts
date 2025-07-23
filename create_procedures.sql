@@ -51,7 +51,7 @@ BEGIN
 	EXECUTE v_sql USING p_round_heat_id;
 
 END;
-$procedure$
+$procedure$;
 
 
 -- 2.
@@ -313,3 +313,296 @@ BEGIN
 END;
 $$;
 
+
+-- 8.
+CREATE OR REPLACE PROCEDURE reseed_heat_by_score(
+    p_round_heat_id INT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_round_id INT;
+    v_event_id INT;
+    v_division_id INT;
+    v_round_num INT;
+    v_previous_round_id INT;
+BEGIN
+    SELECT 
+        rd.round_id, rd.event_id, rd.division_id, rd.round_num
+    INTO 
+        v_round_id, v_event_id, v_division_id, v_round_num
+    FROM ss_heat_details hd
+    JOIN ss_round_details rd ON hd.round_id = rd.round_id
+    WHERE hd.round_heat_id = p_round_heat_id;
+
+    IF NOT FOUND THEN
+        RAISE WARNING 'reseed_heat_by_score: No heat found for round_heat_id %', p_round_heat_id;
+        RETURN;
+    END IF;
+
+    SELECT round_id INTO v_previous_round_id
+    FROM ss_round_details
+    WHERE event_id = v_event_id 
+      AND division_id = v_division_id 
+      AND round_num = v_round_num + 1;
+
+    IF v_previous_round_id IS NULL THEN
+        RAISE WARNING 'reseed_heat_by_score: Could not find previous round for heat %. Seeding will not be performed.', p_round_heat_id;
+        RETURN;
+    END IF;
+
+    RAISE NOTICE 'Reseeding heat % based on scores from previous round (ID: %)', p_round_heat_id, v_previous_round_id;
+
+    WITH previous_round_scores AS (
+        SELECT
+            hr.athlete_id,
+            hr.best AS previous_score
+        FROM ss_heat_results hr
+        JOIN ss_heat_details hd ON hr.round_heat_id = hd.round_heat_id
+        WHERE hd.round_id = v_previous_round_id
+    ),
+    new_seeding AS (
+        SELECT 
+            current_hr.athlete_id,
+            ROW_NUMBER() OVER (ORDER BY prs.previous_score ASC, current_hr.athlete_id) AS new_seed_value
+        FROM ss_heat_results current_hr
+        JOIN previous_round_scores prs ON current_hr.athlete_id = prs.athlete_id
+        WHERE current_hr.round_heat_id = p_round_heat_id
+    )
+    UPDATE ss_heat_results hr
+    SET seeding = ns.new_seed_value
+    FROM new_seeding ns
+    WHERE hr.athlete_id = ns.athlete_id
+      AND hr.round_heat_id = p_round_heat_id;
+
+END;
+$$;
+
+
+CALL progress_athletes_to_next_round(33);
+
+-- 9.
+CREATE OR REPLACE PROCEDURE progress_athletes_to_next_round(
+    p_source_round_id INT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_event_id INT;
+    v_division_id INT;
+    v_source_round_num INT;
+    v_num_to_progress INT; -- This will be fetched from the DESTINATION round
+    v_next_round_id INT;
+    v_next_round_heat_id INT;
+    v_num_source_heats INT;
+    v_num_per_heat INT;
+BEGIN
+    -- 1. Get context for the source round
+    SELECT event_id, division_id, round_num 
+    INTO v_event_id, v_division_id, v_source_round_num
+    FROM ss_round_details WHERE round_id = p_source_round_id;
+
+    IF v_source_round_num IS NULL THEN
+        RAISE EXCEPTION 'Progression failed: Invalid source_round_id %.', p_source_round_id;
+    END IF;
+
+    -- 2. Find the next round in the sequence (round_num - 1)
+    SELECT round_id INTO v_next_round_id FROM ss_round_details
+    WHERE event_id = v_event_id AND division_id = v_division_id AND round_num = v_source_round_num - 1;
+
+    IF v_next_round_id IS NULL THEN
+        RAISE NOTICE 'Progression skipped: Round % is the final round.', p_source_round_id;
+        RETURN;
+    END IF;
+
+    -- 3. Fetch the number of athletes for the DESTINATION round
+    SELECT num_athletes INTO v_num_to_progress
+    FROM ss_round_details WHERE round_id = v_next_round_id;
+    
+    IF v_num_to_progress IS NULL OR v_num_to_progress <= 0 THEN
+        RAISE EXCEPTION 'Progression failed: The destination round (ID: %) has not been configured with the number of athletes to progress to it. Please set `num_athletes` for that round.', v_next_round_id;
+    END IF;
+    
+    -- The rest of the logic remains the same, using the fetched v_num_to_progress
+    SELECT round_heat_id INTO v_next_round_heat_id FROM ss_heat_details
+    WHERE round_id = v_next_round_id LIMIT 1;
+    
+    SELECT COUNT(*) INTO v_num_source_heats FROM ss_heat_details WHERE round_id = p_source_round_id;
+
+    RAISE NOTICE 'Progressing % athletes from round % to round %', v_num_to_progress, p_source_round_id, v_next_round_id;
+
+    IF v_num_source_heats = 1 THEN
+        INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id)
+        SELECT v_next_round_heat_id, v_event_id, v_division_id, hr.athlete_id
+        FROM ss_heat_results hr JOIN ss_heat_details hd ON hr.round_heat_id = hd.round_heat_id
+        WHERE hd.round_id = p_source_round_id
+        ORDER BY hr.best DESC NULLS LAST LIMIT v_num_to_progress
+        ON CONFLICT DO NOTHING;
+    ELSIF v_num_source_heats = 2 THEN
+        v_num_per_heat := v_num_to_progress / 2;
+        IF (v_num_to_progress % 2) <> 0 THEN
+            RAISE WARNING 'Number to progress (%) is odd for a 2-heat round. Taking % from each heat.', v_num_to_progress, v_num_per_heat;
+        END IF;
+
+        INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id)
+        SELECT v_next_round_heat_id, v_event_id, v_division_id, athlete_id FROM (
+            (SELECT hr.athlete_id FROM ss_heat_results hr WHERE hr.round_heat_id = (SELECT round_heat_id FROM ss_heat_details WHERE round_id = p_source_round_id ORDER BY heat_num LIMIT 1 OFFSET 0) ORDER BY hr.best DESC NULLS LAST LIMIT v_num_per_heat)
+            UNION ALL
+            (SELECT hr.athlete_id FROM ss_heat_results hr WHERE hr.round_heat_id = (SELECT round_heat_id FROM ss_heat_details WHERE round_id = p_source_round_id ORDER BY heat_num LIMIT 1 OFFSET 1) ORDER BY hr.best DESC NULLS LAST LIMIT v_num_per_heat)
+        ) AS progressing_athletes
+        ON CONFLICT DO NOTHING;
+    ELSE
+        RAISE WARNING 'Progression logic not implemented for % heats. No action taken.', v_num_source_heats;
+        RETURN;
+    END IF;
+
+    CALL reseed_heat_by_score(v_next_round_heat_id);
+    RAISE NOTICE 'Progression complete for round %.', p_source_round_id;
+END;
+$$;
+
+
+-- 10.
+CREATE OR REPLACE PROCEDURE synchronize_round_progression(
+    p_target_round_id INT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_event_id INT;
+    v_division_id INT;
+    v_target_round_num INT;
+    v_num_to_progress INT; -- To be fetched from the TARGET round
+    v_source_round_id INT;
+    v_target_heat_id INT;
+    v_deleted_count INT;
+    v_inserted_count INT;
+BEGIN
+    -- 1. Get context and num_athletes for the target round we are synchronizing
+    SELECT 
+        rd.event_id, rd.division_id, rd.round_num, rd.num_athletes, hd.round_heat_id
+    INTO 
+        v_event_id, v_division_id, v_target_round_num, v_num_to_progress, v_target_heat_id
+    FROM ss_round_details rd
+    JOIN ss_heat_details hd ON rd.round_id = hd.round_id
+    WHERE rd.round_id = p_target_round_id;
+
+    IF v_target_heat_id IS NULL THEN
+        RAISE EXCEPTION 'Synchronization failed: Invalid target_round_id %.', p_target_round_id;
+    END IF;
+
+    IF v_num_to_progress IS NULL OR v_num_to_progress <= 0 THEN
+        RAISE EXCEPTION 'Synchronization failed: The target round (ID: %) is not configured with the number of athletes that should be in it. Please set `num_athletes` for that round.', p_target_round_id;
+    END IF;
+
+    -- Find the source round
+    SELECT round_id INTO v_source_round_id FROM ss_round_details
+    WHERE event_id = v_event_id AND division_id = v_division_id AND round_num = v_target_round_num + 1;
+
+    -- The rest of the logic is the same, using the fetched v_num_to_progress
+    CREATE TEMP TABLE expected_athletes (athlete_id INT PRIMARY KEY) ON COMMIT DROP;
+    CREATE TEMP TABLE actual_athletes (athlete_id INT PRIMARY KEY) ON COMMIT DROP;
+
+    WITH ExpectedCTE AS (
+        SELECT exp.athlete_id FROM (
+            SELECT COUNT(*) FROM ss_heat_details WHERE round_id = v_source_round_id
+        ) AS shc(num_heats),
+        LATERAL (
+            (SELECT hr.athlete_id FROM ss_heat_results hr JOIN ss_heat_details hd ON hr.round_heat_id = hd.round_heat_id WHERE hd.round_id = v_source_round_id AND shc.num_heats = 1 ORDER BY hr.best DESC NULLS LAST LIMIT v_num_to_progress)
+            UNION ALL
+            (SELECT u.athlete_id FROM (SELECT hr.athlete_id FROM ss_heat_results hr WHERE hr.round_heat_id = (SELECT round_heat_id FROM ss_heat_details WHERE round_id = v_source_round_id ORDER BY heat_num LIMIT 1 OFFSET 0) ORDER BY hr.best DESC NULLS LAST LIMIT v_num_to_progress / 2) AS u WHERE shc.num_heats = 2)
+            UNION ALL
+            (SELECT u.athlete_id FROM (SELECT hr.athlete_id FROM ss_heat_results hr WHERE hr.round_heat_id = (SELECT round_heat_id FROM ss_heat_details WHERE round_id = v_source_round_id ORDER BY heat_num LIMIT 1 OFFSET 1) ORDER BY hr.best DESC NULLS LAST LIMIT v_num_to_progress / 2) AS u WHERE shc.num_heats = 2)
+        ) AS exp
+    )
+    INSERT INTO expected_athletes (athlete_id) SELECT athlete_id FROM ExpectedCTE;
+    
+    INSERT INTO actual_athletes (athlete_id) SELECT hr.athlete_id FROM ss_heat_results hr WHERE hr.round_heat_id = v_target_heat_id;
+
+    DELETE FROM ss_heat_results
+    WHERE round_heat_id = v_target_heat_id AND athlete_id IN (SELECT aa.athlete_id FROM actual_athletes aa LEFT JOIN expected_athletes ea ON aa.athlete_id = ea.athlete_id WHERE ea.athlete_id IS NULL);
+    
+    GET DIAGNOSTICS v_deleted_count = ROW_COUNT;
+    RAISE NOTICE 'Synchronization: Removed % unexpected athlete(s) from round %.', v_deleted_count, p_target_round_id;
+
+    INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id)
+    SELECT v_target_heat_id, v_event_id, v_division_id, ea.athlete_id
+    FROM expected_athletes ea LEFT JOIN actual_athletes aa ON ea.athlete_id = aa.athlete_id WHERE aa.athlete_id IS NULL;
+    
+    GET DIAGNOSTICS v_inserted_count = ROW_COUNT;
+    RAISE NOTICE 'Synchronization: Added % missing athlete(s) to round %.', v_inserted_count, p_target_round_id;
+
+    IF v_deleted_count > 0 OR v_inserted_count > 0 THEN
+        RAISE NOTICE 'Roster changed, reseeding heat %...', v_target_heat_id;
+        CALL reseed_heat_by_score(v_target_heat_id);
+    ELSE
+        RAISE NOTICE 'No changes needed. Roster is already correct.';
+    END IF;
+END;
+$$;
+
+
+-- 11.
+CREATE OR REPLACE FUNCTION update_round_athlete_count()
+    RETURNS TRIGGER AS $$
+DECLARE
+    v_round_id INT;
+BEGIN
+    -- This is the new, robust, and simpler method.
+    -- It will create the temp table only if it doesn't already exist for this session.
+    CREATE TEMP TABLE IF NOT EXISTS ath_num_affected_rounds (round_id INT PRIMARY KEY) ON COMMIT DROP;
+    
+    -- We must still truncate it to ensure it's empty for this specific trigger execution,
+    -- as it might have been used by a previous step in the same transaction.
+    TRUNCATE ath_num_affected_rounds;
+
+    -- The rest of the function remains identical.
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO ath_num_affected_rounds (round_id)
+        SELECT DISTINCT rd.round_id
+        FROM new_rows nr
+        JOIN ss_heat_details hd ON nr.round_heat_id = hd.round_heat_id
+        JOIN ss_round_details rd ON hd.round_id = rd.round_id
+        WHERE rd.round_num = (SELECT MAX(sub_rd.round_num) FROM ss_round_details sub_rd WHERE sub_rd.event_id = rd.event_id AND sub_rd.division_id = rd.division_id)
+        ON CONFLICT (round_id) DO NOTHING;
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        INSERT INTO ath_num_affected_rounds (round_id)
+        SELECT DISTINCT rd.round_id
+        FROM old_rows o
+        JOIN ss_heat_details hd ON o.round_heat_id = hd.round_heat_id
+        JOIN ss_round_details rd ON hd.round_id = rd.round_id
+        WHERE rd.round_num = (SELECT MAX(sub_rd.round_num) FROM ss_round_details sub_rd WHERE sub_rd.event_id = rd.event_id AND sub_rd.division_id = rd.division_id)
+        ON CONFLICT (round_id) DO NOTHING;
+    END IF;
+    
+    IF TG_OP = 'UPDATE' THEN
+        INSERT INTO ath_num_affected_rounds (round_id)
+        SELECT DISTINCT rd.round_id
+        FROM old_rows o JOIN ss_heat_details hd ON o.round_heat_id = hd.round_heat_id JOIN ss_round_details rd ON hd.round_id = rd.round_id
+        WHERE rd.round_num = (SELECT MAX(sub_rd.round_num) FROM ss_round_details sub_rd WHERE sub_rd.event_id = rd.event_id AND sub_rd.division_id = rd.division_id)
+        ON CONFLICT (round_id) DO NOTHING;
+
+        INSERT INTO ath_num_affected_rounds (round_id)
+        SELECT DISTINCT rd.round_id
+        FROM new_rows n JOIN ss_heat_details hd ON n.round_heat_id = hd.round_heat_id JOIN ss_round_details rd ON hd.round_id = rd.round_id
+        WHERE rd.round_num = (SELECT MAX(sub_rd.round_num) FROM ss_round_details sub_rd WHERE sub_rd.event_id = rd.event_id AND sub_rd.division_id = rd.division_id)
+        ON CONFLICT (round_id) DO NOTHING;
+    END IF;
+
+    FOR v_round_id IN SELECT round_id FROM ath_num_affected_rounds
+    LOOP
+        UPDATE ss_round_details rd
+        SET num_athletes = (
+            SELECT COUNT(hr.athlete_id)
+            FROM ss_heat_results hr JOIN ss_heat_details hd ON hr.round_heat_id = hd.round_heat_id
+            WHERE hd.round_id = v_round_id
+        )
+        WHERE rd.round_id = v_round_id;
+    END LOOP;
+
+    DROP TABLE IF EXISTS ath_num_affected_rounds;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;

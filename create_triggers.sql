@@ -1,26 +1,3 @@
-DROP TRIGGER IF EXISTS trg_handle_insert_on_event_division ON ss_event_divisions;
-DROP TRIGGER IF EXISTS trg_handle_update_on_event_division ON ss_event_divisions;
-DROP TRIGGER IF EXISTS trg_handle_insert_on_round_details ON ss_round_details;
-DROP TRIGGER IF EXISTS trg_handle_update_on_round_details ON ss_round_details;
-DROP TRIGGER IF EXISTS trg_handle_insert_on_heat_details ON ss_heat_details;
-DROP TRIGGER IF EXISTS trg_handle_update_on_heat_details ON ss_heat_details;
-DROP TRIGGER IF EXISTS trg_handle_insert_on_event_registrations ON ss_event_registrations;
-DROP TRIGGER IF EXISTS trg_handle_update_on_event_registrations ON ss_event_registrations;
-DROP TRIGGER IF EXISTS trg_reseed_affected_heats ON ss_event_registrations;
-DROP TRIGGER IF EXISTS trg_reseed_after_update ON ss_event_registrations;
-DROP TRIGGER IF EXISTS trg_handle_insert_on_heat_results ON ss_heat_results;
-DROP TRIGGER IF EXISTS trg_handle_update_on_heat_results ON ss_heat_results;
-DROP TRIGGER IF EXISTS trg_handle_insert_on_event_judges ON ss_event_judges;
-DROP TRIGGER IF EXISTS trg_prevent_invalid_judge_update ON ss_event_judges;
-DROP TRIGGER IF EXISTS trg_set_judge_passcode_if_null ON ss_event_judges;
-DROP TRIGGER IF EXISTS trg_handle_run_results ON ss_run_results;
-DROP TRIGGER IF EXISTS trg_update_scores_after_change ON ss_run_scores;
-DROP TRIGGER IF EXISTS trg_reseeding_after_registration_change ON ss_event_registrations;
-DROP TRIGGER IF EXISTS trg_manage_event_divisions ON ss_event_divisions;
-DROP TRIGGER IF EXISTS trg_manage_round_details ON ss_round_details;
-DROP TRIGGER IF EXISTS trg_manage_run_scores ON ss_run_results;
-
-
 -- 1. Insert and update on ss_event_divisions
 CREATE TRIGGER trg_manage_event_divisions
     AFTER INSERT OR UPDATE ON ss_event_divisions
@@ -132,3 +109,25 @@ CREATE TRIGGER trg_handle_update_on_heat_judges
     AFTER UPDATE ON ss_heat_judges
     FOR EACH ROW
     EXECUTE FUNCTION handle_update_on_heat_judges();
+
+-- 19. 
+-- For INSERT operations
+CREATE TRIGGER trg_update_round_athlete_count_after_insert
+    AFTER INSERT ON ss_heat_results
+    REFERENCING NEW TABLE AS new_rows
+    FOR EACH STATEMENT
+    EXECUTE FUNCTION update_round_athlete_count();
+
+-- For UPDATE operations
+CREATE TRIGGER trg_update_round_athlete_count_after_update
+    AFTER UPDATE ON ss_heat_results
+    REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows
+    FOR EACH 
+    EXECUTE FUNCTION update_round_athlete_count();
+
+-- For DELETE operations
+CREATE TRIGGER trg_update_round_athlete_count_after_delete
+    AFTER DELETE ON ss_heat_results
+    REFERENCING OLD TABLE AS old_rows
+    FOR EACH STATEMENT
+    EXECUTE FUNCTION update_round_athlete_count();

@@ -95,6 +95,7 @@ CREATE TABLE ss_round_details (
     num_heats integer NOT NULL DEFAULT 1, 
     round_sequence integer,
     schedule_sequence integer,
+    num_athletes integer NOT NULL DEFAULT 0,
     PRIMARY KEY (event_id, division_id, round_id),
     FOREIGN KEY (event_id, division_id) REFERENCES ss_event_divisions(event_id, division_id) ON DELETE CASCADE ON UPDATE CASCADE
 );

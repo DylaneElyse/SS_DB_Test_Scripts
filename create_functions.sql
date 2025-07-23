@@ -23,10 +23,10 @@ BEGIN
             SELECT
                 NEW.event_id,
                 NEW.division_id,
-                round_number,
-                v_round_list[round_number],
+                (NEW.num_rounds - i + 1) AS calculated_round_num,
+                v_round_list[i] AS round_name,
                 1 
-            FROM generate_series(1, NEW.num_rounds) AS round_number;
+            FROM generate_series(1, NEW.num_rounds) AS i;
         END IF;
     END IF;
 
@@ -62,58 +62,48 @@ $$ LANGUAGE plpgsql;
 -- 3.
 CREATE OR REPLACE FUNCTION handle_insert_on_heat_details()
     RETURNS trigger
-	AS $function$
+    AS $function$
 DECLARE
     v_event_id INT;
     v_division_id INT;
-    v_num_rounds INT;
-    v_round_heat_id INT := new.round_heat_id;
-    v_round_id INT := new.round_id;
+    v_round_num INT;
+    v_max_round_num INT;
 BEGIN
-    SELECT rd.event_id, rd.division_id
-    INTO v_event_id, v_division_id
+    SELECT rd.event_id, rd.division_id, rd.round_num
+    INTO v_event_id, v_division_id, v_round_num
     FROM ss_round_details rd
-    WHERE v_round_id = rd.round_id;
+    WHERE rd.round_id = NEW.round_id;
 
-    SELECT COUNT(*)
-    INTO v_num_rounds
+    SELECT MAX(rd.round_num)
+    INTO v_max_round_num
     FROM ss_round_details rd
     WHERE rd.event_id = v_event_id AND rd.division_id = v_division_id;
 
-    IF v_num_rounds > 1 THEN
-        SELECT INTO v_round_heat_id
-            FROM ss_heat_details hd
-            JOIN ss_round_details rd ON hd.round_id = rd.round_id
-            WHERE rd.round_id = v_round_id
-            AND rd.round_num = 1;
+    IF v_round_num = v_max_round_num THEN
+        RAISE NOTICE 'New heat % is in the entry round (%). Populating with registered athletes.', NEW.round_heat_id, v_round_num;
 
         INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id, seeding)
         SELECT
-            v_round_heat_id,
-            rd.event_id,
-            rd.division_id,
+            NEW.round_heat_id, 
+            reg.event_id,
+            reg.division_id,
             reg.athlete_id,
             0
         FROM
             ss_event_registrations reg
-        INNER JOIN ss_round_details rd ON reg.event_id = rd.event_id AND reg.division_id = rd.division_id
         WHERE
-            rd.round_id = v_round_id
+            reg.event_id = v_event_id
+            AND reg.division_id = v_division_id
             AND NOT EXISTS (
                 SELECT 1
                 FROM ss_heat_results hr
-                INNER JOIN ss_heat_details hd ON hr.round_heat_id = hd.round_heat_id
-                WHERE hd.round_id = v_round_id AND hr.athlete_id = reg.athlete_id
+                WHERE hr.athlete_id = reg.athlete_id AND hr.event_id = reg.event_id AND hr.division_id = reg.division_id
             )
         ON CONFLICT (round_heat_id, athlete_id) DO NOTHING;
 
-        IF NOT FOUND THEN
-            RAISE NOTICE 'Heat created (round_heat_id=%), but no available athletes were found to add.', v_round_heat_id;
-        END IF;
-
     END IF;
 
-	RETURN NULL;
+    RETURN NULL;
 END;
 $function$ LANGUAGE plpgsql;
 
@@ -152,20 +142,21 @@ CREATE OR REPLACE FUNCTION handle_insert_on_event_registrations()
 DECLARE
     target_round_heat_id INT;
 BEGIN
-    SELECT hd.round_heat_id INTO target_round_heat_id
+    SELECT hd.round_heat_id 
+    INTO target_round_heat_id
     FROM ss_round_details AS rd
     JOIN ss_heat_details AS hd ON rd.round_id = hd.round_id
     WHERE rd.event_id = NEW.event_id
       AND rd.division_id = NEW.division_id
-      AND rd.round_num = 1
       AND hd.heat_num = 1
+    ORDER BY rd.round_num DESC 
     LIMIT 1;
 
     IF target_round_heat_id IS NOT NULL THEN
         INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id, seeding)
         VALUES (target_round_heat_id, NEW.event_id, NEW.division_id, NEW.athlete_id, 0);
     ELSE
-        RAISE WARNING 'Registration for Athlete ID % processed, but could not be placed in a heat. Round 1, Heat 1 not found.', NEW.athlete_id;
+        RAISE WARNING 'Registration for Athlete ID % processed, but could not be placed in a heat. No entry round (e.g. Qualifications) found.', NEW.athlete_id;
     END IF;
 
     RETURN NEW;
@@ -188,19 +179,21 @@ BEGIN
           AND shr.round_heat_id = hd.round_heat_id
           AND shr.athlete_id = OLD.athlete_id;
 
-        SELECT hd.round_heat_id INTO target_round_heat_id
+        SELECT hd.round_heat_id 
+        INTO target_round_heat_id
         FROM ss_round_details AS rd
         JOIN ss_heat_details AS hd ON rd.round_id = hd.round_id
         WHERE rd.event_id = NEW.event_id
           AND rd.division_id = NEW.division_id
-          AND rd.round_num = 1 AND hd.heat_num = 1
+          AND hd.heat_num = 1
+        ORDER BY rd.round_num DESC 
         LIMIT 1;
 
         IF target_round_heat_id IS NOT NULL THEN
             INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id, seeding)
             VALUES (target_round_heat_id, NEW.event_id, NEW.division_id, NEW.athlete_id, 0);
         ELSE
-            RAISE WARNING 'Athlete % moved, but could not be placed in a new heat. Round 1, Heat 1 not found.', NEW.athlete_id;
+            RAISE WARNING 'Athlete % moved, but could not be placed in a new heat. No entry round found.', NEW.athlete_id;
         END IF;
     END IF;
 
