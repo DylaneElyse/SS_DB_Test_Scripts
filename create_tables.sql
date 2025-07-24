@@ -147,6 +147,7 @@ CREATE TABLE ss_run_results (
     athlete_id integer NOT NULL,
     run_num integer NOT NULL,
     calc_score DECIMAL(10, 2),
+    dn_flag VARCHAR(3),
     UNIQUE (run_result_id, round_heat_id), 
     UNIQUE (round_heat_id, event_id, division_id, athlete_id, run_num),
     FOREIGN KEY (round_heat_id, event_id, division_id, athlete_id)

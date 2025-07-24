@@ -203,59 +203,48 @@ $$ LANGUAGE plpgsql;
 
 
 -- 7.
-CREATE OR REPLACE FUNCTION manage_registration_reseeding()
-    RETURNS TRIGGER AS $function$
+CREATE OR REPLACE FUNCTION manage_heat_reseeding()
+    RETURNS TRIGGER AS $$
 DECLARE
-    v_round_heat_id INTEGER;
+    v_heat_ids_to_reseed INT[];
+    v_heat_id INT;
 BEGIN
-    CREATE TEMP TABLE IF NOT EXISTS heats_to_reseed (round_heat_id INT PRIMARY KEY) ON COMMIT DROP;
-    TRUNCATE heats_to_reseed;
-
-    IF (TG_OP = 'INSERT') THEN
-        INSERT INTO heats_to_reseed
-        SELECT DISTINCT hr.round_heat_id
-        FROM new_rows nr
-        JOIN ss_heat_results hr ON nr.athlete_id = hr.athlete_id
-        JOIN ss_round_details rd ON hr.event_id = rd.event_id AND hr.division_id = rd.division_id
-        WHERE rd.event_id = nr.event_id AND rd.division_id = nr.division_id;
+    IF TG_OP = 'INSERT' THEN
+        v_heat_ids_to_reseed := ARRAY(SELECT DISTINCT round_heat_id FROM new_rows);
+    ELSIF TG_OP = 'DELETE' THEN
+        v_heat_ids_to_reseed := ARRAY(SELECT DISTINCT round_heat_id FROM old_rows);
+        
+    ELSIF TG_OP = 'UPDATE' THEN
+        v_heat_ids_to_reseed := ARRAY(
+            SELECT round_heat_id FROM (
+                SELECT o.round_heat_id 
+                FROM old_rows o
+                JOIN new_rows n ON o.athlete_id = n.athlete_id
+                WHERE o.round_heat_id IS DISTINCT FROM n.round_heat_id
+                
+                UNION
+                
+                SELECT n.round_heat_id 
+                FROM old_rows o
+                JOIN new_rows n ON o.athlete_id = n.athlete_id
+                WHERE o.round_heat_id IS DISTINCT FROM n.round_heat_id
+            ) AS changed_heats
+        );
     END IF;
 
-    IF (TG_OP = 'UPDATE') THEN
-        INSERT INTO heats_to_reseed
-        SELECT DISTINCT hr.round_heat_id
-        FROM old_rows o
-        JOIN ss_heat_results hr ON o.athlete_id = hr.athlete_id
-        JOIN ss_round_details rd ON hr.event_id = rd.event_id AND hr.division_id = rd.division_id
-        WHERE rd.event_id = o.event_id AND rd.division_id = o.division_id
-        ON CONFLICT (round_heat_id) DO NOTHING;
-
-        INSERT INTO heats_to_reseed
-        SELECT DISTINCT hr.round_heat_id
-        FROM new_rows n
-        JOIN ss_heat_results hr ON n.athlete_id = hr.athlete_id
-        JOIN ss_round_details rd ON hr.event_id = rd.event_id AND hr.division_id = rd.division_id
-        WHERE rd.event_id = n.event_id AND rd.division_id = n.division_id
-        ON CONFLICT (round_heat_id) DO NOTHING;
+    IF array_length(v_heat_ids_to_reseed, 1) IS NULL THEN
+        RETURN NULL;
     END IF;
 
-    IF (TG_OP = 'DELETE') THEN
-        INSERT INTO heats_to_reseed
-        SELECT DISTINCT hr.round_heat_id
-        FROM old_rows o
-        JOIN ss_heat_results hr ON o.athlete_id = hr.athlete_id
-        JOIN ss_round_details rd ON hr.event_id = rd.event_id AND hr.division_id = rd.division_id
-        WHERE rd.event_id = o.event_id AND rd.division_id = o.division_id
-        ON CONFLICT (round_heat_id) DO NOTHING;
-    END IF;
-
-    FOR v_round_heat_id IN SELECT round_heat_id FROM heats_to_reseed
+    FOREACH v_heat_id IN ARRAY v_heat_ids_to_reseed
     LOOP
-        CALL reseed_heat(v_round_heat_id);
+        RAISE NOTICE 'Heat roster changed for heat_id: %. Automatically reseeding.', v_heat_id;
+        CALL reseed_heat(v_heat_id);
     END LOOP;
 
     RETURN NULL;
 END;
-$function$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
 
 -- 8.
@@ -308,17 +297,6 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
--- CREATE OR REPLACE FUNCTION prevent_invalid_judge_update()
---     RETURNS TRIGGER AS $function$
--- BEGIN
---     IF NEW.personnel_id IS DISTINCT FROM OLD.personnel_id OR NEW.event_id IS DISTINCT FROM OLD.event_id THEN
---         IF EXISTS (SELECT 1 FROM ss_run_scores s JOIN ss_run_results r ON s.run_result_id = r.run_result_id WHERE s.personnel_id = OLD.personnel_id AND r.event_id = OLD.event_id AND s.score IS NOT NULL) THEN
---             RAISE EXCEPTION 'Update failed. Judge (ID: %) cannot be removed from event (ID: %) because they have already submitted scores.', OLD.personnel_id, OLD.event_id;
---         END IF;
---     END IF;
---     RETURN NEW;
--- END;
--- $function$ LANGUAGE plpgsql;
 
 
 -- 11.
@@ -436,3 +414,57 @@ END;
 $$ LANGUAGE plpgsql;
 
 
+-- 17.
+CREATE OR REPLACE FUNCTION manage_registration_reseeding()
+    RETURNS TRIGGER AS $function$
+DECLARE
+    v_round_heat_id INTEGER;
+BEGIN
+    CREATE TEMP TABLE IF NOT EXISTS heats_to_reseed (round_heat_id INT PRIMARY KEY) ON COMMIT DROP;
+    TRUNCATE heats_to_reseed;
+
+    IF (TG_OP = 'INSERT') THEN
+        INSERT INTO heats_to_reseed
+        SELECT DISTINCT hr.round_heat_id
+        FROM new_rows nr
+        JOIN ss_heat_results hr ON nr.athlete_id = hr.athlete_id 
+            AND nr.event_id = hr.event_id 
+            AND nr.division_id = hr.division_id;
+    END IF;
+
+    IF (TG_OP = 'UPDATE') THEN
+        INSERT INTO heats_to_reseed
+        SELECT DISTINCT hr.round_heat_id
+        FROM old_rows o
+        JOIN ss_heat_results hr ON o.athlete_id = hr.athlete_id
+            AND o.event_id = hr.event_id 
+            AND o.division_id = hr.division_id
+        ON CONFLICT (round_heat_id) DO NOTHING;
+
+        INSERT INTO heats_to_reseed
+        SELECT DISTINCT hr.round_heat_id
+        FROM new_rows n
+        JOIN ss_heat_results hr ON n.athlete_id = hr.athlete_id
+            AND n.event_id = hr.event_id 
+            AND n.division_id = hr.division_id
+        ON CONFLICT (round_heat_id) DO NOTHING;
+    END IF;
+
+    IF (TG_OP = 'DELETE') THEN
+        INSERT INTO heats_to_reseed
+        SELECT DISTINCT hr.round_heat_id
+        FROM old_rows o
+        JOIN ss_heat_results hr ON o.athlete_id = hr.athlete_id
+            AND o.event_id = hr.event_id 
+            AND o.division_id = hr.division_id
+        ON CONFLICT (round_heat_id) DO NOTHING;
+    END IF;
+
+    FOR v_round_heat_id IN SELECT round_heat_id FROM heats_to_reseed
+    LOOP
+        CALL reseed_heat(v_round_heat_id);
+    END LOOP;
+
+    RETURN NULL;
+END;
+$function$ LANGUAGE plpgsql;

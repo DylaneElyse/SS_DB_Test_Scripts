@@ -1511,7 +1511,6 @@ BEGIN
     CALL ss_seed_lookup_tables();
     CALL ss_seed_event_data();
     CALL ss_seed_athlete_data();
-    CALL ss_reseed_heats();
     RAISE NOTICE 'Step 6: Poplulating scores....';
     CALL update_m_ba_q_scores();
     CALL update_w_ba_f_scores();

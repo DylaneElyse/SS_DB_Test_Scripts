@@ -379,8 +379,6 @@ END;
 $$;
 
 
-CALL progress_athletes_to_next_round(33);
-
 -- 9.
 CREATE OR REPLACE PROCEDURE progress_athletes_to_next_round(
     p_source_round_id INT
@@ -391,13 +389,12 @@ DECLARE
     v_event_id INT;
     v_division_id INT;
     v_source_round_num INT;
-    v_num_to_progress INT; -- This will be fetched from the DESTINATION round
+    v_num_to_progress INT;
     v_next_round_id INT;
     v_next_round_heat_id INT;
     v_num_source_heats INT;
     v_num_per_heat INT;
 BEGIN
-    -- 1. Get context for the source round
     SELECT event_id, division_id, round_num 
     INTO v_event_id, v_division_id, v_source_round_num
     FROM ss_round_details WHERE round_id = p_source_round_id;
@@ -406,7 +403,6 @@ BEGIN
         RAISE EXCEPTION 'Progression failed: Invalid source_round_id %.', p_source_round_id;
     END IF;
 
-    -- 2. Find the next round in the sequence (round_num - 1)
     SELECT round_id INTO v_next_round_id FROM ss_round_details
     WHERE event_id = v_event_id AND division_id = v_division_id AND round_num = v_source_round_num - 1;
 
@@ -415,7 +411,6 @@ BEGIN
         RETURN;
     END IF;
 
-    -- 3. Fetch the number of athletes for the DESTINATION round
     SELECT num_athletes INTO v_num_to_progress
     FROM ss_round_details WHERE round_id = v_next_round_id;
     
@@ -423,7 +418,6 @@ BEGIN
         RAISE EXCEPTION 'Progression failed: The destination round (ID: %) has not been configured with the number of athletes to progress to it. Please set `num_athletes` for that round.', v_next_round_id;
     END IF;
     
-    -- The rest of the logic remains the same, using the fetched v_num_to_progress
     SELECT round_heat_id INTO v_next_round_heat_id FROM ss_heat_details
     WHERE round_id = v_next_round_id LIMIT 1;
     
@@ -472,13 +466,12 @@ DECLARE
     v_event_id INT;
     v_division_id INT;
     v_target_round_num INT;
-    v_num_to_progress INT; -- To be fetched from the TARGET round
+    v_num_to_progress INT;
     v_source_round_id INT;
     v_target_heat_id INT;
     v_deleted_count INT;
     v_inserted_count INT;
 BEGIN
-    -- 1. Get context and num_athletes for the target round we are synchronizing
     SELECT 
         rd.event_id, rd.division_id, rd.round_num, rd.num_athletes, hd.round_heat_id
     INTO 
@@ -495,11 +488,9 @@ BEGIN
         RAISE EXCEPTION 'Synchronization failed: The target round (ID: %) is not configured with the number of athletes that should be in it. Please set `num_athletes` for that round.', p_target_round_id;
     END IF;
 
-    -- Find the source round
     SELECT round_id INTO v_source_round_id FROM ss_round_details
     WHERE event_id = v_event_id AND division_id = v_division_id AND round_num = v_target_round_num + 1;
 
-    -- The rest of the logic is the same, using the fetched v_num_to_progress
     CREATE TEMP TABLE expected_athletes (athlete_id INT PRIMARY KEY) ON COMMIT DROP;
     CREATE TEMP TABLE actual_athletes (athlete_id INT PRIMARY KEY) ON COMMIT DROP;
 
@@ -548,15 +539,10 @@ CREATE OR REPLACE FUNCTION update_round_athlete_count()
 DECLARE
     v_round_id INT;
 BEGIN
-    -- This is the new, robust, and simpler method.
-    -- It will create the temp table only if it doesn't already exist for this session.
     CREATE TEMP TABLE IF NOT EXISTS ath_num_affected_rounds (round_id INT PRIMARY KEY) ON COMMIT DROP;
     
-    -- We must still truncate it to ensure it's empty for this specific trigger execution,
-    -- as it might have been used by a previous step in the same transaction.
     TRUNCATE ath_num_affected_rounds;
 
-    -- The rest of the function remains identical.
     IF TG_OP = 'INSERT' THEN
         INSERT INTO ath_num_affected_rounds (round_id)
         SELECT DISTINCT rd.round_id
