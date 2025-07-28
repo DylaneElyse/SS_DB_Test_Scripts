@@ -220,41 +220,41 @@ $$;
 
 
 -- 6.
-CREATE OR REPLACE PROCEDURE add_event_judge(
-    p_event_id INT,
-    p_header VARCHAR,
-    p_name VARCHAR DEFAULT NULL
-)
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_personnel_id INT;
-BEGIN
-    INSERT INTO ss_event_judges (event_id, header, name)
-    VALUES (p_event_id, p_header, p_name)
-    RETURNING personnel_id INTO v_personnel_id;
+-- CREATE OR REPLACE PROCEDURE add_event_judge(
+--     p_event_id INT,
+--     p_header VARCHAR,
+--     p_name VARCHAR DEFAULT NULL
+-- )
+-- LANGUAGE plpgsql
+-- AS $$
+-- DECLARE
+--     v_personnel_id INT;
+-- BEGIN
+--     INSERT INTO ss_event_judges (event_id, header, name)
+--     VALUES (p_event_id, p_header, p_name)
+--     RETURNING personnel_id INTO v_personnel_id;
 
-    RAISE NOTICE 'Created event judge with personnel_id: % for event_id: %', v_personnel_id, p_event_id;
+--     RAISE NOTICE 'Created event judge with personnel_id: % for event_id: %', v_personnel_id, p_event_id;
 
-    INSERT INTO ss_heat_judges (round_heat_id, personnel_id)
-    SELECT hd.round_heat_id, v_personnel_id
-    FROM ss_heat_details AS hd
-    JOIN ss_round_details AS rd ON hd.round_id = rd.round_id
-    WHERE rd.event_id = p_event_id
-    ON CONFLICT (round_heat_id, personnel_id) DO NOTHING;
+--     INSERT INTO ss_heat_judges (round_heat_id, personnel_id)
+--     SELECT hd.round_heat_id, v_personnel_id
+--     FROM ss_heat_details AS hd
+--     JOIN ss_round_details AS rd ON hd.round_id = rd.round_id
+--     WHERE rd.event_id = p_event_id
+--     ON CONFLICT (round_heat_id, personnel_id) DO NOTHING;
 
-    RAISE NOTICE 'Assigned judge % to all heats for event %.', v_personnel_id, p_event_id;
+--     RAISE NOTICE 'Assigned judge % to all heats for event %.', v_personnel_id, p_event_id;
 
-    INSERT INTO ss_run_scores (personnel_id, run_result_id, round_heat_id)
-    SELECT v_personnel_id, r.run_result_id, r.round_heat_id
-    FROM ss_run_results AS r
-    WHERE r.event_id = p_event_id
-    ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
+--     INSERT INTO ss_run_scores (personnel_id, run_result_id, round_heat_id)
+--     SELECT v_personnel_id, r.run_result_id, r.round_heat_id
+--     FROM ss_run_results AS r
+--     WHERE r.event_id = p_event_id
+--     ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
 
-    RAISE NOTICE 'Created placeholder run scores for judge % across event %.', v_personnel_id, p_event_id;
+--     RAISE NOTICE 'Created placeholder run scores for judge % across event %.', v_personnel_id, p_event_id;
 
-END;
-$$;
+-- END;
+-- $$;
 
 
 -- 7.
