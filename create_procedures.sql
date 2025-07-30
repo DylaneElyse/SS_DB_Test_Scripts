@@ -413,7 +413,7 @@ $$;
 
 
 -- 9.
-CREATE OR REPLACE PROCEDURE progress_athletes_to_next_round(
+CREATE OR REPLACE PROCEDURE progress_and_synchronize_round(
     p_source_round_id INT
 )
 LANGUAGE plpgsql
@@ -422,12 +422,19 @@ DECLARE
     v_event_id INT;
     v_division_id INT;
     v_source_round_num INT;
-    v_num_to_progress INT;
-    v_next_round_id INT;
-    v_next_round_heat_id INT;
     v_num_source_heats INT;
+
+    v_destination_round_id INT;
+    v_destination_heat_id INT;
+    v_num_to_progress INT;
+    
     v_num_per_heat INT;
+    v_deleted_count INT;
+    v_inserted_count INT;
 BEGIN
+    -------------------------------------------------------------------
+    RAISE NOTICE 'Starting progression from source round ID: %', p_source_round_id;
+
     SELECT event_id, division_id, round_num 
     INTO v_event_id, v_division_id, v_source_round_num
     FROM ss_round_details WHERE round_id = p_source_round_id;
@@ -436,132 +443,90 @@ BEGIN
         RAISE EXCEPTION 'Progression failed: Invalid source_round_id %.', p_source_round_id;
     END IF;
 
-    SELECT round_id INTO v_next_round_id FROM ss_round_details
-    WHERE event_id = v_event_id AND division_id = v_division_id AND round_num = v_source_round_num - 1;
+    SELECT round_id, num_athletes INTO v_destination_round_id, v_num_to_progress
+    FROM ss_round_details
+    WHERE event_id = v_event_id 
+      AND division_id = v_division_id 
+      AND round_num = v_source_round_num - 1;
 
-    IF v_next_round_id IS NULL THEN
-        RAISE NOTICE 'Progression skipped: Round % is the final round.', p_source_round_id;
+    IF v_destination_round_id IS NULL THEN
+        RAISE NOTICE 'Progression skipped: Round % is the final round for this division.', p_source_round_id;
         RETURN;
     END IF;
 
-    SELECT num_athletes INTO v_num_to_progress
-    FROM ss_round_details WHERE round_id = v_next_round_id;
-    
     IF v_num_to_progress IS NULL OR v_num_to_progress <= 0 THEN
-        RAISE EXCEPTION 'Progression failed: The destination round (ID: %) has not been configured with the number of athletes to progress to it. Please set `num_athletes` for that round.', v_next_round_id;
+        RAISE EXCEPTION 'Progression failed: The destination round (ID: %) has not been configured with the number of athletes to progress to it. Please set `num_athletes`.', v_destination_round_id;
     END IF;
     
-    SELECT round_heat_id INTO v_next_round_heat_id FROM ss_heat_details
-    WHERE round_id = v_next_round_id LIMIT 1;
+    SELECT round_heat_id INTO v_destination_heat_id FROM ss_heat_details
+    WHERE round_id = v_destination_round_id LIMIT 1;
     
+    IF v_destination_heat_id IS NULL THEN
+        RAISE EXCEPTION 'Progression failed: The destination round (ID: %) does not have any heats.', v_destination_round_id;
+    END IF;
+    
+    RAISE NOTICE 'Calculating the % athletes who should progress to round ID % (heat ID %)...', v_num_to_progress, v_destination_round_id, v_destination_heat_id;
+
+    CREATE TEMP TABLE expected_athletes (athlete_id INT PRIMARY KEY) ON COMMIT DROP;
+
     SELECT COUNT(*) INTO v_num_source_heats FROM ss_heat_details WHERE round_id = p_source_round_id;
 
-    RAISE NOTICE 'Progressing % athletes from round % to round %', v_num_to_progress, p_source_round_id, v_next_round_id;
-
     IF v_num_source_heats = 1 THEN
-        INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id)
-        SELECT v_next_round_heat_id, v_event_id, v_division_id, hr.athlete_id
-        FROM ss_heat_results hr JOIN ss_heat_details hd ON hr.round_heat_id = hd.round_heat_id
+        INSERT INTO expected_athletes (athlete_id)
+        SELECT hr.athlete_id
+        FROM ss_heat_results hr
+        JOIN ss_heat_details hd ON hr.round_heat_id = hd.round_heat_id
         WHERE hd.round_id = p_source_round_id
-        ORDER BY hr.best DESC NULLS LAST LIMIT v_num_to_progress
-        ON CONFLICT DO NOTHING;
+        ORDER BY hr.best DESC NULLS LAST
+        LIMIT v_num_to_progress;
+
     ELSIF v_num_source_heats = 2 THEN
         v_num_per_heat := v_num_to_progress / 2;
         IF (v_num_to_progress % 2) <> 0 THEN
-            RAISE WARNING 'Number to progress (%) is odd for a 2-heat round. Taking % from each heat.', v_num_to_progress, v_num_per_heat;
+            RAISE WARNING 'Number to progress (%) is odd for a 2-heat round. Taking % from each heat, which might not match the total.', v_num_to_progress, v_num_per_heat;
         END IF;
 
-        INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id)
-        SELECT v_next_round_heat_id, v_event_id, v_division_id, athlete_id FROM (
+        INSERT INTO expected_athletes (athlete_id)
+        SELECT athlete_id FROM (
             (SELECT hr.athlete_id FROM ss_heat_results hr WHERE hr.round_heat_id = (SELECT round_heat_id FROM ss_heat_details WHERE round_id = p_source_round_id ORDER BY heat_num LIMIT 1 OFFSET 0) ORDER BY hr.best DESC NULLS LAST LIMIT v_num_per_heat)
             UNION ALL
             (SELECT hr.athlete_id FROM ss_heat_results hr WHERE hr.round_heat_id = (SELECT round_heat_id FROM ss_heat_details WHERE round_id = p_source_round_id ORDER BY heat_num LIMIT 1 OFFSET 1) ORDER BY hr.best DESC NULLS LAST LIMIT v_num_per_heat)
-        ) AS progressing_athletes
-        ON CONFLICT DO NOTHING;
+        ) AS progressing_athletes;
     ELSE
         RAISE WARNING 'Progression logic not implemented for % heats. No action taken.', v_num_source_heats;
+        DROP TABLE expected_athletes;
         RETURN;
     END IF;
 
-    CALL reseed_heat_by_score(v_next_round_heat_id);
-    RAISE NOTICE 'Progression complete for round %.', p_source_round_id;
-END;
-$$;
-
-
--- 10.
-CREATE OR REPLACE PROCEDURE synchronize_round_progression(
-    p_target_round_id INT
-)
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_event_id INT;
-    v_division_id INT;
-    v_target_round_num INT;
-    v_num_to_progress INT;
-    v_source_round_id INT;
-    v_target_heat_id INT;
-    v_deleted_count INT;
-    v_inserted_count INT;
-BEGIN
-    SELECT 
-        rd.event_id, rd.division_id, rd.round_num, rd.num_athletes, hd.round_heat_id
-    INTO 
-        v_event_id, v_division_id, v_target_round_num, v_num_to_progress, v_target_heat_id
-    FROM ss_round_details rd
-    JOIN ss_heat_details hd ON rd.round_id = hd.round_id
-    WHERE rd.round_id = p_target_round_id;
-
-    IF v_target_heat_id IS NULL THEN
-        RAISE EXCEPTION 'Synchronization failed: Invalid target_round_id %.', p_target_round_id;
-    END IF;
-
-    IF v_num_to_progress IS NULL OR v_num_to_progress <= 0 THEN
-        RAISE EXCEPTION 'Synchronization failed: The target round (ID: %) is not configured with the number of athletes that should be in it. Please set `num_athletes` for that round.', p_target_round_id;
-    END IF;
-
-    SELECT round_id INTO v_source_round_id FROM ss_round_details
-    WHERE event_id = v_event_id AND division_id = v_division_id AND round_num = v_target_round_num + 1;
-
-    CREATE TEMP TABLE expected_athletes (athlete_id INT PRIMARY KEY) ON COMMIT DROP;
     CREATE TEMP TABLE actual_athletes (athlete_id INT PRIMARY KEY) ON COMMIT DROP;
-
-    WITH ExpectedCTE AS (
-        SELECT exp.athlete_id FROM (
-            SELECT COUNT(*) FROM ss_heat_details WHERE round_id = v_source_round_id
-        ) AS shc(num_heats),
-        LATERAL (
-            (SELECT hr.athlete_id FROM ss_heat_results hr JOIN ss_heat_details hd ON hr.round_heat_id = hd.round_heat_id WHERE hd.round_id = v_source_round_id AND shc.num_heats = 1 ORDER BY hr.best DESC NULLS LAST LIMIT v_num_to_progress)
-            UNION ALL
-            (SELECT u.athlete_id FROM (SELECT hr.athlete_id FROM ss_heat_results hr WHERE hr.round_heat_id = (SELECT round_heat_id FROM ss_heat_details WHERE round_id = v_source_round_id ORDER BY heat_num LIMIT 1 OFFSET 0) ORDER BY hr.best DESC NULLS LAST LIMIT v_num_to_progress / 2) AS u WHERE shc.num_heats = 2)
-            UNION ALL
-            (SELECT u.athlete_id FROM (SELECT hr.athlete_id FROM ss_heat_results hr WHERE hr.round_heat_id = (SELECT round_heat_id FROM ss_heat_details WHERE round_id = v_source_round_id ORDER BY heat_num LIMIT 1 OFFSET 1) ORDER BY hr.best DESC NULLS LAST LIMIT v_num_to_progress / 2) AS u WHERE shc.num_heats = 2)
-        ) AS exp
-    )
-    INSERT INTO expected_athletes (athlete_id) SELECT athlete_id FROM ExpectedCTE;
-    
-    INSERT INTO actual_athletes (athlete_id) SELECT hr.athlete_id FROM ss_heat_results hr WHERE hr.round_heat_id = v_target_heat_id;
+    INSERT INTO actual_athletes (athlete_id) 
+    SELECT hr.athlete_id FROM ss_heat_results hr WHERE hr.round_heat_id = v_destination_heat_id;
 
     DELETE FROM ss_heat_results
-    WHERE round_heat_id = v_target_heat_id AND athlete_id IN (SELECT aa.athlete_id FROM actual_athletes aa LEFT JOIN expected_athletes ea ON aa.athlete_id = ea.athlete_id WHERE ea.athlete_id IS NULL);
+    WHERE round_heat_id = v_destination_heat_id
+      AND athlete_id IN (SELECT aa.athlete_id FROM actual_athletes aa LEFT JOIN expected_athletes ea ON aa.athlete_id = ea.athlete_id WHERE ea.athlete_id IS NULL);
     
     GET DIAGNOSTICS v_deleted_count = ROW_COUNT;
-    RAISE NOTICE 'Synchronization: Removed % unexpected athlete(s) from round %.', v_deleted_count, p_target_round_id;
+    RAISE NOTICE 'Synchronization: Removed % incorrect athlete(s) from destination heat %.', v_deleted_count, v_destination_heat_id;
 
     INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id)
-    SELECT v_target_heat_id, v_event_id, v_division_id, ea.athlete_id
-    FROM expected_athletes ea LEFT JOIN actual_athletes aa ON ea.athlete_id = aa.athlete_id WHERE aa.athlete_id IS NULL;
+    SELECT v_destination_heat_id, v_event_id, v_division_id, ea.athlete_id
+    FROM expected_athletes ea
+    LEFT JOIN actual_athletes aa ON ea.athlete_id = aa.athlete_id
+    WHERE aa.athlete_id IS NULL
+    ON CONFLICT DO NOTHING;
     
     GET DIAGNOSTICS v_inserted_count = ROW_COUNT;
-    RAISE NOTICE 'Synchronization: Added % missing athlete(s) to round %.', v_inserted_count, p_target_round_id;
+    RAISE NOTICE 'Synchronization: Added % missing athlete(s) to destination heat %.', v_inserted_count, v_destination_heat_id;
 
     IF v_deleted_count > 0 OR v_inserted_count > 0 THEN
-        RAISE NOTICE 'Roster changed, reseeding heat %...', v_target_heat_id;
-        CALL reseed_heat_by_score(v_target_heat_id);
+        RAISE NOTICE 'Roster changed, reseeding heat % by score...', v_destination_heat_id;
+        CALL reseed_heat_by_score(v_destination_heat_id);
     ELSE
-        RAISE NOTICE 'No changes needed. Roster is already correct.';
+        RAISE NOTICE 'No changes needed. Roster for heat % is already correct.', v_destination_heat_id;
     END IF;
+    
+    RAISE NOTICE 'Progression and synchronization from round % complete.', p_source_round_id;
 END;
 $$;
 
