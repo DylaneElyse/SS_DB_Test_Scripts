@@ -169,3 +169,27 @@ CREATE TRIGGER trg_reseed_after_heat_results_delete
     REFERENCING OLD TABLE AS old_rows
     FOR EACH STATEMENT
     EXECUTE FUNCTION manage_heat_reseeding();
+
+-- 25.
+CREATE TRIGGER trg_after_insert_event_judge
+    AFTER INSERT ON ss_event_judges
+    FOR EACH ROW
+    EXECUTE FUNCTION ss_handle_new_event_judge();
+
+-- 26.
+CREATE TRIGGER trg_before_delete_event_judge
+BEFORE DELETE ON ss_event_judges
+FOR EACH ROW
+EXECUTE FUNCTION ss_handle_deleted_event_judge();
+
+-- 27.
+CREATE TRIGGER trg_after_update_event_judge
+AFTER UPDATE ON ss_event_judges
+FOR EACH ROW
+EXECUTE FUNCTION ss_handle_updated_event_judge();
+
+-- 28.
+CREATE TRIGGER trigger_recalculate_on_dn_flag_change
+    AFTER UPDATE ON ss_run_results
+    FOR EACH ROW
+    EXECUTE FUNCTION trg_recalculate_on_dn_flag_change();

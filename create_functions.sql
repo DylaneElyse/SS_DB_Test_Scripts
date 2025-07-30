@@ -468,3 +468,198 @@ BEGIN
     RETURN NULL;
 END;
 $function$ LANGUAGE plpgsql;
+
+
+-- 18.
+CREATE OR REPLACE FUNCTION ss_handle_new_event_judge()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- This function is triggered AFTER a new judge is inserted into ss_event_judges.
+    -- The special variable 'NEW' holds the data of the newly inserted row.
+
+    RAISE NOTICE 'Trigger (INSERT): Creating assignments for new judge (personnel_id: %) on event (event_id: %)', NEW.personnel_id, NEW.event_id;
+
+    -- 1. Assign the new judge to all heats associated with the event.
+    --    This replaces the second INSERT in your original procedure.
+    INSERT INTO ss_heat_judges (round_heat_id, personnel_id)
+    SELECT hd.round_heat_id, NEW.personnel_id
+    FROM ss_heat_details AS hd
+    JOIN ss_round_details AS rd ON hd.round_id = rd.round_id
+    WHERE rd.event_id = NEW.event_id
+    ON CONFLICT (round_heat_id, personnel_id) DO NOTHING;
+
+    RAISE NOTICE 'Trigger (INSERT): Assigned judge % to all heats for event %.', NEW.personnel_id, NEW.event_id;
+
+    -- 2. Create placeholder score entries for all runs associated with the event.
+    --    This replaces the third INSERT in your original procedure.
+    INSERT INTO ss_run_scores (personnel_id, run_result_id, round_heat_id)
+    SELECT NEW.personnel_id, r.run_result_id, r.round_heat_id
+    FROM ss_run_results AS r
+    WHERE r.event_id = NEW.event_id
+    ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
+
+    RAISE NOTICE 'Trigger (INSERT): Created placeholder run scores for judge % across event %.', NEW.personnel_id, NEW.event_id;
+
+    -- For an AFTER trigger, the return value is ignored, but returning NEW is good practice.
+    RETURN NEW;
+END;
+$$;
+
+
+-- 19.
+CREATE OR REPLACE FUNCTION ss_handle_deleted_event_judge()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- This function is triggered BEFORE a judge is deleted from ss_event_judges.
+    -- The special variable 'OLD' holds the data of the row about to be deleted.
+    -- We use a BEFORE trigger to ensure the related data is removed before the parent row is gone.
+
+    RAISE NOTICE 'Trigger (DELETE): Removing assignments for judge (personnel_id: %) from event (event_id: %)', OLD.personnel_id, OLD.event_id;
+
+    -- 1. Delete the placeholder run scores for this judge in this event.
+    DELETE FROM ss_run_scores
+    WHERE personnel_id = OLD.personnel_id
+      AND run_result_id IN (
+          SELECT run_result_id FROM ss_run_results WHERE event_id = OLD.event_id
+      );
+
+    RAISE NOTICE 'Trigger (DELETE): Removed run scores for judge % from event %.', OLD.personnel_id, OLD.event_id;
+
+    -- 2. Delete the heat assignments for this judge in this event.
+    DELETE FROM ss_heat_judges
+    WHERE personnel_id = OLD.personnel_id
+      AND round_heat_id IN (
+          SELECT hd.round_heat_id
+          FROM ss_heat_details AS hd
+          JOIN ss_round_details AS rd ON hd.round_id = rd.round_id
+          WHERE rd.event_id = OLD.event_id
+      );
+      
+    RAISE NOTICE 'Trigger (DELETE): Removed heat assignments for judge % from event %.', OLD.personnel_id, OLD.event_id;
+
+    -- For a BEFORE trigger, we must return the row that will proceed with the operation (in this case, deletion).
+    RETURN OLD;
+END;
+$$;
+
+
+-- 20.
+CREATE OR REPLACE FUNCTION ss_handle_updated_event_judge()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- This function is triggered AFTER a judge's record is updated.
+    -- We have access to both 'OLD' (the data before update) and 'NEW' (the data after update).
+
+    -- Only act if the event_id has actually changed.
+    -- If only the name or header was updated, we don't need to do anything.
+    IF NEW.event_id IS DISTINCT FROM OLD.event_id THEN
+
+        RAISE NOTICE 'Trigger (UPDATE): Moving judge % from event % to event %.', NEW.personnel_id, OLD.event_id, NEW.event_id;
+
+        -- STEP 1: Perform the DELETE logic for the OLD event.
+        -- ======================================================
+
+        -- Delete placeholder run scores from the old event.
+        DELETE FROM ss_run_scores
+        WHERE personnel_id = OLD.personnel_id
+          AND run_result_id IN (
+              SELECT run_result_id FROM ss_run_results WHERE event_id = OLD.event_id
+          );
+
+        -- Delete heat assignments from the old event.
+        DELETE FROM ss_heat_judges
+        WHERE personnel_id = OLD.personnel_id
+          AND round_heat_id IN (
+              SELECT hd.round_heat_id
+              FROM ss_heat_details AS hd
+              JOIN ss_round_details AS rd ON hd.round_id = rd.round_id
+              WHERE rd.event_id = OLD.event_id
+          );
+
+        -- STEP 2: Perform the INSERT logic for the NEW event.
+        -- =====================================================
+
+        -- Assign the judge to all heats in the new event.
+        INSERT INTO ss_heat_judges (round_heat_id, personnel_id)
+        SELECT hd.round_heat_id, NEW.personnel_id
+        FROM ss_heat_details AS hd
+        JOIN ss_round_details AS rd ON hd.round_id = rd.round_id
+        WHERE rd.event_id = NEW.event_id
+        ON CONFLICT (round_heat_id, personnel_id) DO NOTHING;
+
+        -- Create placeholder scores for all runs in the new event.
+        INSERT INTO ss_run_scores (personnel_id, run_result_id, round_heat_id)
+        SELECT NEW.personnel_id, r.run_result_id, r.round_heat_id
+        FROM ss_run_results AS r
+        WHERE r.event_id = NEW.event_id
+        ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
+        
+        RAISE NOTICE 'Trigger (UPDATE): Move complete for judge %.', NEW.personnel_id;
+
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+
+-- 21.
+CREATE OR REPLACE FUNCTION add_event_judge(
+    p_event_id INT,
+    p_header VARCHAR,
+    p_name VARCHAR DEFAULT NULL
+)
+RETURNS INT 
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_personnel_id INT;
+BEGIN
+    INSERT INTO ss_event_judges (event_id, header, name)
+    VALUES (p_event_id, p_header, p_name)
+    RETURNING personnel_id INTO v_personnel_id;
+
+    RAISE NOTICE 'Created event judge with personnel_id: % for event_id: %', v_personnel_id, p_event_id;
+
+    INSERT INTO ss_heat_judges (round_heat_id, personnel_id)
+    SELECT hd.round_heat_id, v_personnel_id
+    FROM ss_heat_details AS hd
+    JOIN ss_round_details AS rd ON hd.round_id = rd.round_id
+    WHERE rd.event_id = p_event_id
+    ON CONFLICT (round_heat_id, personnel_id) DO NOTHING;
+
+    RAISE NOTICE 'Assigned judge % to all heats for event %.', v_personnel_id, p_event_id;
+
+    INSERT INTO ss_run_scores (personnel_id, run_result_id, round_heat_id)
+    SELECT v_personnel_id, r.run_result_id, r.round_heat_id
+    FROM ss_run_results AS r
+    WHERE r.event_id = p_event_id
+    ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
+
+    RAISE NOTICE 'Created placeholder run scores for judge % across event %.', v_personnel_id, p_event_id;
+
+    RETURN v_personnel_id;
+
+END;
+$$;
+
+
+-- 22.
+CREATE OR REPLACE FUNCTION trg_recalculate_on_dn_flag_change()
+    RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.dn_flag IS DISTINCT FROM OLD.dn_flag THEN
+        RAISE NOTICE 'dn_flag changed for run_result_id: %. Recalculating scores.', NEW.run_result_id;
+        
+        CALL calculate_average_score(NEW.run_result_id);
+    END IF;
+
+    RETURN NULL; 
+END;
+$$;
