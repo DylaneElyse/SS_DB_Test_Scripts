@@ -78,22 +78,22 @@ BEGIN
     UPDATE ss_heat_details SET num_runs = 2 WHERE round_id IN (SELECT round_id FROM ss_round_details WHERE event_id = 200 AND division_id = 3 AND round_name = 'Finals');
     UPDATE ss_heat_details SET num_runs = 2 WHERE round_id IN (SELECT round_id FROM ss_round_details WHERE event_id = 200 AND division_id = 4 AND round_name = 'Finals');
 
-    CALL add_event_judge(100, 'Judge 1');
-    CALL add_event_judge(100, 'Judge 2');
-    CALL add_event_judge(100, 'Judge 3');
-    CALL add_event_judge(100, 'Judge 4');
-    CALL add_event_judge(100, 'Judge 5');
-    CALL add_event_judge(100, 'Judge 6');
-    CALL add_event_judge(200, 'Judge 1');
-    CALL add_event_judge(200, 'Judge 2');
-    CALL add_event_judge(200, 'Judge 3');
-    CALL add_event_judge(200, 'Judge 4');
-    CALL add_event_judge(200, 'Judge 5');
-    CALL add_event_judge(300, 'Judge 1');
-    CALL add_event_judge(300, 'Judge 2');
-    CALL add_event_judge(300, 'Judge 3');
-    CALL add_event_judge(300, 'Judge 4');
-    CALL add_event_judge(300, 'Judge 5');
+    PERFORM add_event_judge(100, 'Judge 1');
+    PERFORM add_event_judge(100, 'Judge 2');
+    PERFORM add_event_judge(100, 'Judge 3');
+    PERFORM add_event_judge(100, 'Judge 4');
+    PERFORM add_event_judge(100, 'Judge 5');
+    PERFORM add_event_judge(100, 'Judge 6');
+    PERFORM add_event_judge(200, 'Judge 1');
+    PERFORM add_event_judge(200, 'Judge 2');
+    PERFORM add_event_judge(200, 'Judge 3');
+    PERFORM add_event_judge(200, 'Judge 4');
+    PERFORM add_event_judge(200, 'Judge 5');
+    PERFORM add_event_judge(300, 'Judge 1');
+    PERFORM add_event_judge(300, 'Judge 2');
+    PERFORM add_event_judge(300, 'Judge 3');
+    PERFORM add_event_judge(300, 'Judge 4');
+    PERFORM add_event_judge(300, 'Judge 5');
 
     RAISE NOTICE 'Step 3: Complete.';
 END;
