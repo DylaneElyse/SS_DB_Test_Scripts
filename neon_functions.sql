@@ -1,6 +1,9 @@
--- 1.
-CREATE OR REPLACE FUNCTION handle_event_divisions()
-    RETURNS TRIGGER AS $$
+-- Neon Functions - August 10
+
+CREATE OR REPLACE FUNCTION public.handle_event_divisions()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
 DECLARE
     v_round_list TEXT[];
 BEGIN
@@ -32,12 +35,13 @@ BEGIN
 
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$function$;
 
 
--- 2.
-CREATE OR REPLACE FUNCTION handle_round_details()
-    RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION public.handle_round_details()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
 BEGIN
     IF (TG_OP = 'INSERT') OR (TG_OP = 'UPDATE' AND NEW.num_heats IS DISTINCT FROM OLD.num_heats) THEN
 
@@ -56,18 +60,13 @@ BEGIN
 
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$function$;
 
 
--- 3.
-CREATE OR REPLACE FUNCTION add_event_judge(
-    p_event_id INT,
-    p_header VARCHAR,
-    p_name VARCHAR DEFAULT NULL
-)
-RETURNS INT
-LANGUAGE plpgsql
-AS $$
+CREATE OR REPLACE FUNCTION public.add_event_judge(p_event_id integer, p_header character varying, p_name character varying DEFAULT NULL::character varying)
+ RETURNS integer
+ LANGUAGE plpgsql
+AS $function$
 DECLARE
     v_personnel_id INT;
 BEGIN
@@ -96,12 +95,13 @@ BEGIN
 
     RETURN v_personnel_id;
 END;
-$$;
+$function$;
 
 
--- 4.
-CREATE OR REPLACE FUNCTION generate_random_4_digit_code()
-    RETURNS TEXT AS $function$
+CREATE OR REPLACE FUNCTION public.generate_random_4_digit_code()
+ RETURNS text
+ LANGUAGE plpgsql
+AS $function$
 DECLARE
     v_random_code TEXT;
     v_is_unique   BOOLEAN := FALSE;
@@ -112,12 +112,16 @@ BEGIN
     END LOOP;
     RETURN v_random_code;
 END;
-$function$ LANGUAGE plpgsql VOLATILE;
+$function$;
 
 
--- 5.
-CREATE OR REPLACE FUNCTION handle_insert_on_event_registrations()
-    RETURNS TRIGGER AS $$
+
+
+
+CREATE OR REPLACE FUNCTION public.handle_insert_on_event_registrations()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
 DECLARE
     target_round_heat_id INT;
 BEGIN
@@ -140,12 +144,13 @@ BEGIN
 
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$function$;
 
 
--- 6.
-CREATE OR REPLACE FUNCTION handle_insert_on_heat_results()
-	RETURNS TRIGGER AS $function$
+CREATE OR REPLACE FUNCTION public.handle_insert_on_heat_results()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
 DECLARE
     v_num_runs ss_heat_details.num_runs%TYPE;
 BEGIN
@@ -158,12 +163,13 @@ BEGIN
     END IF;
     RETURN NULL;
 END;
-$function$ LANGUAGE plpgsql;
+$function$;
 
 
--- 7.
-CREATE OR REPLACE FUNCTION handle_insert_on_run_results()
-    RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION public.handle_insert_on_run_results()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
 DECLARE
     v_event_id INTEGER;
 BEGIN
@@ -189,12 +195,16 @@ BEGIN
 
     RETURN NULL;
 END;
-$$ LANGUAGE plpgsql;
+$function$;
 
 
--- 8.
-CREATE OR REPLACE FUNCTION handle_update_on_event_registrations()
-    RETURNS TRIGGER AS $$
+
+
+
+CREATE OR REPLACE FUNCTION public.handle_update_on_event_registrations()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
 DECLARE
     target_round_heat_id INT;
 BEGIN
@@ -227,12 +237,13 @@ BEGIN
 
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$function$;
 
 
--- 9.
-CREATE OR REPLACE FUNCTION handle_update_on_heat_details()
-    RETURNS TRIGGER AS $trigger$
+CREATE OR REPLACE FUNCTION public.handle_update_on_heat_details()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
 BEGIN
     IF NEW.num_runs IS DISTINCT FROM OLD.num_runs THEN
         RAISE NOTICE 'num_runs changed for round_heat_id=%. Re-creating athlete run results.', NEW.round_heat_id;
@@ -255,14 +266,13 @@ BEGIN
 
     RETURN NEW;
 END;
-$trigger$ LANGUAGE plpgsql;
+$function$;
 
 
-
-
--- 10.
-CREATE OR REPLACE FUNCTION handle_update_on_heat_judges()
-    RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION public.handle_update_on_heat_judges()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
 BEGIN
     RAISE NOTICE 'Judge assignment updated. Creating placeholder scores for personnel_id % in new heat_id %', NEW.personnel_id, NEW.round_heat_id;
     
@@ -277,14 +287,13 @@ BEGIN
 
     RETURN NULL;
 END;
-$$ LANGUAGE plpgsql;
+$function$;
 
 
-
-
--- 11.
-CREATE OR REPLACE FUNCTION handle_update_on_heat_results()
-    RETURNS TRIGGER AS $function$
+CREATE OR REPLACE FUNCTION public.handle_update_on_heat_results()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
 BEGIN
     IF NEW.round_heat_id IS DISTINCT FROM OLD.round_heat_id THEN
         UPDATE ss_run_results
@@ -296,12 +305,13 @@ BEGIN
     END IF;
     RETURN NULL;
 END;
-$function$ LANGUAGE plpgsql;
+$function$;
 
 
--- 12.
-CREATE OR REPLACE FUNCTION manage_heat_reseeding()
-    RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION public.manage_heat_reseeding()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
 DECLARE
     v_heat_ids_to_reseed INT[];
     v_heat_id INT;
@@ -341,13 +351,13 @@ BEGIN
 
     RETURN NULL;
 END;
-$$ LANGUAGE plpgsql;
+$function$;
 
 
-
--- 13.
-CREATE OR REPLACE FUNCTION manage_registration_reseeding()
-    RETURNS TRIGGER AS $function$
+CREATE OR REPLACE FUNCTION public.manage_registration_reseeding()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
 DECLARE
     v_round_heat_id INTEGER;
 BEGIN
@@ -398,14 +408,13 @@ BEGIN
 
     RETURN NULL;
 END;
-$function$ LANGUAGE plpgsql;
+$function$;
 
 
-
-
--- 14.
-CREATE OR REPLACE FUNCTION prevent_event_judge_reassignment()
-    RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION public.prevent_event_judge_reassignment()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
 BEGIN
     IF EXISTS (
         SELECT 1 
@@ -417,14 +426,13 @@ BEGIN
     
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$function$;
 
 
-
-
--- 15.
-CREATE OR REPLACE FUNCTION prevent_heat_judge_reassignment()
-    RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION public.prevent_heat_judge_reassignment()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
 BEGIN
     IF EXISTS (
         SELECT 1 
@@ -438,26 +446,26 @@ BEGIN
 
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$function$;
 
 
--- 16.
-CREATE OR REPLACE FUNCTION set_judge_passcode_if_null()
-    RETURNS TRIGGER AS $function$
+CREATE OR REPLACE FUNCTION public.set_judge_passcode_if_null()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
 BEGIN
     IF NEW.passcode IS NULL THEN
         NEW.passcode := generate_random_4_digit_code();
     END IF;
     RETURN NEW;
 END;
-$function$ LANGUAGE plpgsql;
+$function$;
 
 
-
-
--- 17.
-CREATE OR REPLACE FUNCTION trg_start_score_calculation_chain()
-    RETURNS TRIGGER LANGUAGE plpgsql AS $function$
+CREATE OR REPLACE FUNCTION public.trg_start_score_calculation_chain()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
 DECLARE
     v_run_result_id INTEGER;
 BEGIN
@@ -472,7 +480,6 @@ END;
 $function$;
 
 
--- 18.
 CREATE OR REPLACE FUNCTION public.update_round_athlete_count()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -535,53 +542,3 @@ END;
 $function$;
 
 
-
-
-
-
-CREATE OR REPLACE FUNCTION handle_insert_on_heat_details()
-    RETURNS trigger
-    AS $function$
-DECLARE
-    v_event_id INT;
-    v_division_id INT;
-    v_round_num INT;
-    v_max_round_num INT;
-BEGIN
-    SELECT rd.event_id, rd.division_id, rd.round_num
-    INTO v_event_id, v_division_id, v_round_num
-    FROM ss_round_details rd
-    WHERE rd.round_id = NEW.round_id;
-
-    SELECT MAX(rd.round_num)
-    INTO v_max_round_num
-    FROM ss_round_details rd
-    WHERE rd.event_id = v_event_id AND rd.division_id = v_division_id;
-
-    IF v_round_num = v_max_round_num THEN
-        RAISE NOTICE 'New heat % is in the entry round (%). Populating with registered athletes.', NEW.round_heat_id, v_round_num;
-
-        INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id, seeding)
-        SELECT
-            NEW.round_heat_id, 
-            reg.event_id,
-            reg.division_id,
-            reg.athlete_id,
-            0
-        FROM
-            ss_event_registrations reg
-        WHERE
-            reg.event_id = v_event_id
-            AND reg.division_id = v_division_id
-            AND NOT EXISTS (
-                SELECT 1
-                FROM ss_heat_results hr
-                WHERE hr.athlete_id = reg.athlete_id AND hr.event_id = reg.event_id AND hr.division_id = reg.division_id
-            )
-        ON CONFLICT (round_heat_id, athlete_id) DO NOTHING;
-
-    END IF;
-
-    RETURN NULL;
-END;
-$function$ LANGUAGE plpgsql;

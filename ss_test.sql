@@ -70,7 +70,7 @@ CALL add_heat_judge([round_heat_id], [header], [name (optional, will default to 
 
 
 
-
+CALL progress_and_synchronize_round(57);
 
 
 

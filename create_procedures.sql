@@ -55,21 +55,21 @@ $procedure$;
 
 
 -- 2.
-CREATE OR REPLACE PROCEDURE calculate_average_score(p_run_result_id INTEGER)
-	AS $procedure$
-BEGIN
-    UPDATE ss_run_results
-    SET
-        calc_score = (
-            SELECT ROUND(AVG(score), 2)
-            FROM ss_run_scores
-            WHERE run_result_id = p_run_result_id AND score <> 0 AND score IS NOT NULL
-        )
-    WHERE run_result_id = p_run_result_id;
+-- CREATE OR REPLACE PROCEDURE calculate_average_score(p_run_result_id INTEGER)
+-- 	AS $procedure$
+-- BEGIN
+--     UPDATE ss_run_results
+--     SET
+--         calc_score = (
+--             SELECT ROUND(AVG(score), 2)
+--             FROM ss_run_scores
+--             WHERE run_result_id = p_run_result_id AND score <> 0 AND score IS NOT NULL
+--         )
+--     WHERE run_result_id = p_run_result_id;
 
-    CALL find_best_score(p_run_result_id);
-END;
-$procedure$ LANGUAGE plpgsql;
+--     CALL find_best_score(p_run_result_id);
+-- END;
+-- $procedure$ LANGUAGE plpgsql;
 
 
 -- 3.
@@ -106,35 +106,6 @@ BEGIN
 END;
 $procedure$;
 
--- CREATE OR REPLACE PROCEDURE find_best_score(p_run_result_id INTEGER)
--- 	AS $procedure$
--- DECLARE
---     v_athlete_id INTEGER;
---     v_round_heat_id INTEGER;
---     v_best_score DECIMAL;
--- BEGIN
---     SELECT rr.athlete_id, rr.round_heat_id
---     INTO v_athlete_id, v_round_heat_id
---     FROM ss_run_results AS rr
---     WHERE rr.run_result_id = p_run_result_id;
-
---     IF NOT FOUND THEN
---         RAISE NOTICE 'No run result found for id %', p_run_result_id;
---         RETURN;
---     END IF;
-
---     SELECT MAX(rr.calc_score)
---     INTO v_best_score
---     FROM ss_run_results AS rr
---     WHERE rr.athlete_id = v_athlete_id AND rr.round_heat_id = v_round_heat_id;
-
---     UPDATE ss_heat_results
---     SET
---         best = v_best_score
---     WHERE
---         athlete_id = v_athlete_id AND round_heat_id = v_round_heat_id;
--- END;
--- $procedure$ LANGUAGE plpgsql;
 
 
 -- 4.
@@ -191,100 +162,62 @@ $$;
 
 
 -- 5.
-CREATE OR REPLACE PROCEDURE update_run_score(
-    p_event_id INT,
-    p_athlete_first_name VARCHAR,
-    p_athlete_last_name VARCHAR,
-    p_round_name VARCHAR,
-    p_run_num INT,
-    p_judge_header VARCHAR,
-    p_score DECIMAL
-)
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_athlete_id INT;
-    v_personnel_id INT;
-    v_run_result_id INT;
-    v_round_heat_id INT;
-BEGIN
-    SELECT athlete_id INTO v_athlete_id
-    FROM ss_athletes
-    WHERE lower(first_name) = lower(p_athlete_first_name)
-      AND lower(last_name) = lower(p_athlete_last_name);
-
-    IF v_athlete_id IS NULL THEN
-        RAISE NOTICE 'Athlete not found (case-insensitive search): % %. Skipping update.', p_athlete_first_name, p_athlete_last_name;
-        RETURN;
-    END IF;
-
-    SELECT personnel_id INTO v_personnel_id
-    FROM ss_event_judges
-    WHERE event_id = p_event_id
-      AND lower(header) = lower(p_judge_header);
-
-    IF v_personnel_id IS NULL THEN
-        RAISE NOTICE 'Judge not found for event % with header (case-insensitive search): %. Skipping update.', p_event_id, p_judge_header;
-        RETURN;
-    END IF;
-
-    SELECT T1.run_result_id, T1.round_heat_id 
-    INTO v_run_result_id, v_round_heat_id
-    FROM ss_run_results AS T1
-    JOIN ss_heat_details AS T2 ON T1.round_heat_id = T2.round_heat_id
-    JOIN ss_round_details AS T3 ON T2.round_id = T3.round_id
-    WHERE T1.athlete_id = v_athlete_id
-      AND T1.event_id = p_event_id
-      AND T1.run_num = p_run_num
-      AND lower(T3.round_name) = lower(p_round_name);
-
-    IF v_run_result_id IS NULL THEN
-        RAISE NOTICE 'Run result not found for Athlete ID %, Run %, Round % (case-insensitive search). Skipping update.', v_athlete_id, p_run_num, p_round_name;
-        RETURN;
-    END IF;
-
-    INSERT INTO ss_run_scores (run_result_id, personnel_id, round_heat_id, score)
-    VALUES (v_run_result_id, v_personnel_id, v_round_heat_id, p_score)
-    ON CONFLICT (run_result_id, personnel_id) DO UPDATE
-    SET score = EXCLUDED.score;
-
-END;
-$$;
-
-
--- 6.
--- CREATE OR REPLACE PROCEDURE add_event_judge(
+-- CREATE OR REPLACE PROCEDURE update_run_score(
 --     p_event_id INT,
---     p_header VARCHAR,
---     p_name VARCHAR DEFAULT NULL
+--     p_athlete_first_name VARCHAR,
+--     p_athlete_last_name VARCHAR,
+--     p_round_name VARCHAR,
+--     p_run_num INT,
+--     p_judge_header VARCHAR,
+--     p_score DECIMAL
 -- )
 -- LANGUAGE plpgsql
 -- AS $$
 -- DECLARE
+--     v_athlete_id INT;
 --     v_personnel_id INT;
+--     v_run_result_id INT;
+--     v_round_heat_id INT;
 -- BEGIN
---     INSERT INTO ss_event_judges (event_id, header, name)
---     VALUES (p_event_id, p_header, p_name)
---     RETURNING personnel_id INTO v_personnel_id;
+--     SELECT athlete_id INTO v_athlete_id
+--     FROM ss_athletes
+--     WHERE lower(first_name) = lower(p_athlete_first_name)
+--       AND lower(last_name) = lower(p_athlete_last_name);
 
---     RAISE NOTICE 'Created event judge with personnel_id: % for event_id: %', v_personnel_id, p_event_id;
+--     IF v_athlete_id IS NULL THEN
+--         RAISE NOTICE 'Athlete not found (case-insensitive search): % %. Skipping update.', p_athlete_first_name, p_athlete_last_name;
+--         RETURN;
+--     END IF;
 
---     INSERT INTO ss_heat_judges (round_heat_id, personnel_id)
---     SELECT hd.round_heat_id, v_personnel_id
---     FROM ss_heat_details AS hd
---     JOIN ss_round_details AS rd ON hd.round_id = rd.round_id
---     WHERE rd.event_id = p_event_id
---     ON CONFLICT (round_heat_id, personnel_id) DO NOTHING;
+--     SELECT personnel_id INTO v_personnel_id
+--     FROM ss_event_judges
+--     WHERE event_id = p_event_id
+--       AND lower(header) = lower(p_judge_header);
 
---     RAISE NOTICE 'Assigned judge % to all heats for event %.', v_personnel_id, p_event_id;
+--     IF v_personnel_id IS NULL THEN
+--         RAISE NOTICE 'Judge not found for event % with header (case-insensitive search): %. Skipping update.', p_event_id, p_judge_header;
+--         RETURN;
+--     END IF;
 
---     INSERT INTO ss_run_scores (personnel_id, run_result_id, round_heat_id)
---     SELECT v_personnel_id, r.run_result_id, r.round_heat_id
---     FROM ss_run_results AS r
---     WHERE r.event_id = p_event_id
---     ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
+--     SELECT T1.run_result_id, T1.round_heat_id 
+--     INTO v_run_result_id, v_round_heat_id
+--     FROM ss_run_results AS T1
+--     JOIN ss_heat_details AS T2 ON T1.round_heat_id = T2.round_heat_id
+--     JOIN ss_round_details AS T3 ON T2.round_id = T3.round_id
+--     WHERE T1.athlete_id = v_athlete_id
+--       AND T1.event_id = p_event_id
+--       AND T1.run_num = p_run_num
+--       AND lower(T3.round_name) = lower(p_round_name);
 
---     RAISE NOTICE 'Created placeholder run scores for judge % across event %.', v_personnel_id, p_event_id;
+--     IF v_run_result_id IS NULL THEN
+--         RAISE NOTICE 'Run result not found for Athlete ID %, Run %, Round % (case-insensitive search). Skipping update.', v_athlete_id, p_run_num, p_round_name;
+--         RETURN;
+--     END IF;
+
+--     INSERT INTO ss_run_scores (run_result_id, personnel_id, round_heat_id, score)
+--     VALUES (v_run_result_id, v_personnel_id, v_round_heat_id, p_score)
+--     ON CONFLICT (run_result_id, personnel_id) DO UPDATE
+--     SET score = EXCLUDED.score;
 
 -- END;
 -- $$;
@@ -531,62 +464,3 @@ END;
 $$;
 
 
--- 11.
-CREATE OR REPLACE FUNCTION update_round_athlete_count()
-    RETURNS TRIGGER AS $$
-DECLARE
-    v_round_id INT;
-BEGIN
-    CREATE TEMP TABLE IF NOT EXISTS ath_num_affected_rounds (round_id INT PRIMARY KEY) ON COMMIT DROP;
-    
-    TRUNCATE ath_num_affected_rounds;
-
-    IF TG_OP = 'INSERT' THEN
-        INSERT INTO ath_num_affected_rounds (round_id)
-        SELECT DISTINCT rd.round_id
-        FROM new_rows nr
-        JOIN ss_heat_details hd ON nr.round_heat_id = hd.round_heat_id
-        JOIN ss_round_details rd ON hd.round_id = rd.round_id
-        WHERE rd.round_num = (SELECT MAX(sub_rd.round_num) FROM ss_round_details sub_rd WHERE sub_rd.event_id = rd.event_id AND sub_rd.division_id = rd.division_id)
-        ON CONFLICT (round_id) DO NOTHING;
-    END IF;
-
-    IF TG_OP = 'DELETE' THEN
-        INSERT INTO ath_num_affected_rounds (round_id)
-        SELECT DISTINCT rd.round_id
-        FROM old_rows o
-        JOIN ss_heat_details hd ON o.round_heat_id = hd.round_heat_id
-        JOIN ss_round_details rd ON hd.round_id = rd.round_id
-        WHERE rd.round_num = (SELECT MAX(sub_rd.round_num) FROM ss_round_details sub_rd WHERE sub_rd.event_id = rd.event_id AND sub_rd.division_id = rd.division_id)
-        ON CONFLICT (round_id) DO NOTHING;
-    END IF;
-    
-    IF TG_OP = 'UPDATE' THEN
-        INSERT INTO ath_num_affected_rounds (round_id)
-        SELECT DISTINCT rd.round_id
-        FROM old_rows o JOIN ss_heat_details hd ON o.round_heat_id = hd.round_heat_id JOIN ss_round_details rd ON hd.round_id = rd.round_id
-        WHERE rd.round_num = (SELECT MAX(sub_rd.round_num) FROM ss_round_details sub_rd WHERE sub_rd.event_id = rd.event_id AND sub_rd.division_id = rd.division_id)
-        ON CONFLICT (round_id) DO NOTHING;
-
-        INSERT INTO ath_num_affected_rounds (round_id)
-        SELECT DISTINCT rd.round_id
-        FROM new_rows n JOIN ss_heat_details hd ON n.round_heat_id = hd.round_heat_id JOIN ss_round_details rd ON hd.round_id = rd.round_id
-        WHERE rd.round_num = (SELECT MAX(sub_rd.round_num) FROM ss_round_details sub_rd WHERE sub_rd.event_id = rd.event_id AND sub_rd.division_id = rd.division_id)
-        ON CONFLICT (round_id) DO NOTHING;
-    END IF;
-
-    FOR v_round_id IN SELECT round_id FROM ath_num_affected_rounds
-    LOOP
-        UPDATE ss_round_details rd
-        SET num_athletes = (
-            SELECT COUNT(hr.athlete_id)
-            FROM ss_heat_results hr JOIN ss_heat_details hd ON hr.round_heat_id = hd.round_heat_id
-            WHERE hd.round_id = v_round_id
-        )
-        WHERE rd.round_id = v_round_id;
-    END LOOP;
-
-    DROP TABLE IF EXISTS ath_num_affected_rounds;
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
