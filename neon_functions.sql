@@ -1,67 +1,4 @@
--- Neon Functions - August 10
-
-CREATE OR REPLACE FUNCTION public.handle_event_divisions()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
-DECLARE
-    v_round_list TEXT[];
-BEGIN
-    IF (TG_OP = 'INSERT') OR (TG_OP = 'UPDATE' AND NEW.num_rounds IS DISTINCT FROM OLD.num_rounds) THEN
-
-        IF TG_OP = 'UPDATE' THEN
-            DELETE FROM ss_round_details WHERE event_id = OLD.event_id AND division_id = OLD.division_id;
-        END IF;
-
-        v_round_list := CASE NEW.num_rounds
-            WHEN 1 THEN ARRAY['Finals']
-            WHEN 2 THEN ARRAY['Qualifications', 'Finals']
-            WHEN 3 THEN ARRAY['Qualifications', 'Semi-Finals', 'Finals']
-            WHEN 4 THEN ARRAY['Qualifications', 'Quarter-Finals', 'Semi-Finals', 'Finals']
-            ELSE ARRAY[]::TEXT[]
-        END;
-
-        IF array_length(v_round_list, 1) > 0 THEN
-            INSERT INTO ss_round_details (event_id, division_id, round_num, round_name, num_heats)
-            SELECT
-                NEW.event_id,
-                NEW.division_id,
-                (NEW.num_rounds - i + 1) AS calculated_round_num,
-                v_round_list[i] AS round_name,
-                1 
-            FROM generate_series(1, NEW.num_rounds) AS i;
-        END IF;
-    END IF;
-
-    RETURN NEW;
-END;
-$function$;
-
-
-CREATE OR REPLACE FUNCTION public.handle_round_details()
- RETURNS trigger
- LANGUAGE plpgsql
-AS $function$
-BEGIN
-    IF (TG_OP = 'INSERT') OR (TG_OP = 'UPDATE' AND NEW.num_heats IS DISTINCT FROM OLD.num_heats) THEN
-
-        IF TG_OP = 'UPDATE' THEN
-            DELETE FROM ss_heat_details WHERE round_id = OLD.round_id;
-        END IF;
-
-        IF NEW.num_heats > 0 THEN
-            INSERT INTO ss_heat_details (round_id, heat_num)
-            SELECT
-                NEW.round_id,
-                i
-            FROM generate_series(1, NEW.num_heats) AS i;
-        END IF;
-    END IF;
-
-    RETURN NEW;
-END;
-$function$;
-
+-- Neon Functions - Aug 11
 
 CREATE OR REPLACE FUNCTION public.add_event_judge(p_event_id integer, p_header character varying, p_name character varying DEFAULT NULL::character varying)
  RETURNS integer
@@ -115,7 +52,42 @@ END;
 $function$;
 
 
+CREATE OR REPLACE FUNCTION public.handle_event_divisions()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_round_list TEXT[];
+BEGIN
+    IF (TG_OP = 'INSERT') OR (TG_OP = 'UPDATE' AND NEW.num_rounds IS DISTINCT FROM OLD.num_rounds) THEN
 
+        IF TG_OP = 'UPDATE' THEN
+            DELETE FROM ss_round_details WHERE event_id = OLD.event_id AND division_id = OLD.division_id;
+        END IF;
+
+        v_round_list := CASE NEW.num_rounds
+            WHEN 1 THEN ARRAY['Finals']
+            WHEN 2 THEN ARRAY['Qualifications', 'Finals']
+            WHEN 3 THEN ARRAY['Qualifications', 'Semi-Finals', 'Finals']
+            WHEN 4 THEN ARRAY['Qualifications', 'Quarter-Finals', 'Semi-Finals', 'Finals']
+            ELSE ARRAY[]::TEXT[]
+        END;
+
+        IF array_length(v_round_list, 1) > 0 THEN
+            INSERT INTO ss_round_details (event_id, division_id, round_num, round_name, num_heats)
+            SELECT
+                NEW.event_id,
+                NEW.division_id,
+                (NEW.num_rounds - i + 1) AS calculated_round_num,
+                v_round_list[i] AS round_name,
+                1 
+            FROM generate_series(1, NEW.num_rounds) AS i;
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.handle_insert_on_event_registrations()
@@ -143,6 +115,69 @@ BEGIN
     END IF;
 
     RETURN NEW;
+END;
+$function$;
+
+
+CREATE OR REPLACE FUNCTION public.handle_insert_on_heat_details()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_event_id INT;
+    v_division_id INT;
+    v_round_num INT;
+    v_max_round_num INT;
+BEGIN
+    -- Find the details of the round this new heat belongs to.
+    SELECT rd.event_id, rd.division_id, rd.round_num
+    INTO v_event_id, v_division_id, v_round_num
+    FROM ss_round_details rd
+    WHERE rd.round_id = NEW.round_id;
+
+    -- *** NEW LOGIC START ***
+    -- When a new heat is created, it needs to be assigned any judges
+    -- that have already been created for the entire event.
+    RAISE NOTICE 'New heat % created for event %. Assigning all existing event judges.', NEW.round_heat_id, v_event_id;
+    
+    INSERT INTO ss_heat_judges (round_heat_id, personnel_id)
+    SELECT NEW.round_heat_id, ej.personnel_id
+    FROM ss_event_judges AS ej
+    WHERE ej.event_id = v_event_id
+    ON CONFLICT (round_heat_id, personnel_id) DO NOTHING;
+    -- *** NEW LOGIC END ***
+
+    -- Find the highest round number for this event/division (the entry round)
+    SELECT MAX(rd.round_num)
+    INTO v_max_round_num
+    FROM ss_round_details rd
+    WHERE rd.event_id = v_event_id AND rd.division_id = v_division_id;
+
+    -- Only populate athletes if the new heat is in the very first round (the one with the highest round_num)
+    IF v_round_num = v_max_round_num THEN
+        RAISE NOTICE 'New heat % is in the entry round (%). Populating with registered athletes.', NEW.round_heat_id, v_round_num;
+
+        INSERT INTO ss_heat_results (round_heat_id, event_id, division_id, athlete_id, seeding)
+        SELECT
+            NEW.round_heat_id,
+            reg.event_id,
+            reg.division_id,
+            reg.athlete_id,
+            0 -- Seeding is initially 0, to be updated by the reseed procedure.
+        FROM
+            ss_event_registrations reg
+        WHERE
+            reg.event_id = v_event_id
+            AND reg.division_id = v_division_id
+            AND NOT EXISTS (
+                SELECT 1
+                FROM ss_heat_results hr
+                WHERE hr.athlete_id = reg.athlete_id AND hr.event_id = reg.event_id AND hr.division_id = reg.division_id
+            )
+        ON CONFLICT (round_heat_id, athlete_id) DO NOTHING;
+    END IF;
+
+    RETURN NULL; -- This trigger performs an action but doesn't modify the new row itself.
 END;
 $function$;
 
@@ -198,7 +233,29 @@ END;
 $function$;
 
 
+CREATE OR REPLACE FUNCTION public.handle_round_details()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    IF (TG_OP = 'INSERT') OR (TG_OP = 'UPDATE' AND NEW.num_heats IS DISTINCT FROM OLD.num_heats) THEN
 
+        IF TG_OP = 'UPDATE' THEN
+            DELETE FROM ss_heat_details WHERE round_id = OLD.round_id;
+        END IF;
+
+        IF NEW.num_heats > 0 THEN
+            INSERT INTO ss_heat_details (round_id, heat_num)
+            SELECT
+                NEW.round_id,
+                i
+            FROM generate_series(1, NEW.num_heats) AS i;
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$function$;
 
 
 CREATE OR REPLACE FUNCTION public.handle_update_on_event_registrations()
@@ -542,3 +599,22 @@ END;
 $function$;
 
 
+CREATE OR REPLACE FUNCTION public.handle_new_heat_judge_assignment()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RAISE NOTICE 'Judge assignment changed. Creating placeholder scores for personnel_id % in heat_id %', NEW.personnel_id, NEW.round_heat_id;
+    
+    INSERT INTO ss_run_scores (personnel_id, run_result_id, round_heat_id)
+    SELECT 
+        NEW.personnel_id, 
+        r.run_result_id, 
+        r.round_heat_id
+    FROM ss_run_results AS r
+    WHERE r.round_heat_id = NEW.round_heat_id
+    ON CONFLICT (personnel_id, run_result_id) DO NOTHING;
+
+    RETURN NULL;
+END;
+$function$;

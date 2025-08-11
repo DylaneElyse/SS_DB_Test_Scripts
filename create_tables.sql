@@ -397,3 +397,5 @@ CREATE TABLE ss_event_personnel (
 --     FOREIGN KEY (user_id) REFERENCES ss_users(user_id) ON DELETE RESTRICT ON UPDATE CASCADE,
 --     FOREIGN KEY (event_id) REFERENCES ss_events(event_id) ON DELETE CASCADE ON UPDATE CASCADE
 -- );
+
+
