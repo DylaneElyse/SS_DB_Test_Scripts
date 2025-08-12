@@ -171,6 +171,10 @@ DECLARE
     v_deleted_count INT;
     v_inserted_count INT;
 BEGIN
+    -- Clean up any leftover temporary tables from previous failed runs
+    DROP TABLE IF EXISTS expected_athletes;
+    DROP TABLE IF EXISTS actual_athletes;
+    
     RAISE NOTICE 'Starting progression from source round ID: %', p_source_round_id;
 
     SELECT event_id, division_id, round_num 
@@ -219,17 +223,17 @@ BEGIN
         LIMIT v_num_to_progress;
 
     ELSIF v_num_source_heats = 2 THEN
-        v_num_per_heat := v_num_to_progress / 2;
-        IF (v_num_to_progress % 2) <> 0 THEN
-            RAISE WARNING 'Number to progress (%) is odd for a 2-heat round. Taking % from each heat, which might not match the total.', v_num_to_progress, v_num_per_heat;
-        END IF;
+        -- For 2-heat rounds, select the top athletes overall, not per heat
+        -- This ensures we get the best performers regardless of which heat they were in
+        RAISE NOTICE 'Progressing top % athletes from 2-heat qualification round', v_num_to_progress;
 
         INSERT INTO expected_athletes (athlete_id)
-        SELECT athlete_id FROM (
-            (SELECT hr.athlete_id FROM ss_heat_results hr WHERE hr.round_heat_id = (SELECT round_heat_id FROM ss_heat_details WHERE round_id = p_source_round_id ORDER BY heat_num LIMIT 1 OFFSET 0) ORDER BY hr.best DESC NULLS LAST LIMIT v_num_per_heat)
-            UNION ALL
-            (SELECT hr.athlete_id FROM ss_heat_results hr WHERE hr.round_heat_id = (SELECT round_heat_id FROM ss_heat_details WHERE round_id = p_source_round_id ORDER BY heat_num LIMIT 1 OFFSET 1) ORDER BY hr.best DESC NULLS LAST LIMIT v_num_per_heat)
-        ) AS progressing_athletes;
+        SELECT hr.athlete_id
+        FROM ss_heat_results hr
+        JOIN ss_heat_details hd ON hr.round_heat_id = hd.round_heat_id
+        WHERE hd.round_id = p_source_round_id
+        ORDER BY hr.best DESC NULLS LAST
+        LIMIT v_num_to_progress;
     ELSE
         RAISE WARNING 'Progression logic not implemented for % heats. No action taken.', v_num_source_heats;
         DROP TABLE expected_athletes;
@@ -779,5 +783,3 @@ BEGIN
 
 END;
 $procedure$;
-
-
